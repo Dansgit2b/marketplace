@@ -72,7 +72,7 @@ describe("CollectionSidebar", () => {
       />,
     );
 
-    expect(screen.getByRole("button", { name: /genesis/i })).toHaveClass("bg-accent");
+    expect(screen.getByRole("button", { name: /genesis/i })).toHaveClass("bg-muted/70");
   });
 
   it("calls_onSelect_when_clicked", async () => {

@@ -1,3 +1,4 @@
+vi.mock("@/lib/marketplace/use-collections",()=>({useOwnedCollections:()=>({data:mockGetConfig().collections})}));
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -124,7 +125,7 @@ describe("SidebarLayout", () => {
       </SidebarLayout>,
     );
 
-    expect(screen.getByRole("complementary")).toHaveClass("sticky", "top-14");
+    expect(screen.getByRole("complementary")).toHaveClass("sticky", "top-16");
   });
 
   it("sidebar_has_border_right", () => {
@@ -201,7 +202,7 @@ describe("SidebarLayout", () => {
     expect(screen.getByTestId("sidebar-toggle-container")).toHaveClass("mt-auto", "border-t");
   });
 
-  it("passes_project_ids_and_banner_images_to_sidebar", () => {
+  it("uses_registered_collection_names_and_banner_images", () => {
     mockGetConfig.mockReturnValue({
       chainLabel: "SN_MAIN",
       sdkConfig: { chainId: "0x534e5f4d41494e" },
@@ -223,7 +224,6 @@ describe("SidebarLayout", () => {
           {
             address: "0xbeast",
             name: "Beasts",
-            projectId: "project-beasts",
             imageUrl: "/banners/beasts.svg",
           },
         ],

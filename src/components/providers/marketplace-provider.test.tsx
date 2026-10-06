@@ -56,7 +56,7 @@ vi.mock("@tanstack/react-query", () => ({
   },
 }));
 
-vi.mock("@cartridge/arcade/marketplace/react", () => ({
+vi.mock("@/lib/marketplace/react", () => ({
   MarketplaceClientProvider: ({
     config,
     children,

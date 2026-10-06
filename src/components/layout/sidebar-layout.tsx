@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
-import { getMarketplaceRuntimeConfig } from "@/lib/marketplace/config";
+import { useOwnedCollections } from "@/lib/marketplace/use-collections";
 import { CollectionSidebar } from "@/features/home/collection-sidebar";
 import { MobileSidebarSheet } from "@/features/home/mobile-sidebar-sheet";
 import { Button } from "@/components/ui/button";
@@ -30,7 +30,7 @@ function activeCollectionAddress(pathname: string | null) {
 export function SidebarLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { collections } = getMarketplaceRuntimeConfig();
+  const { data: collections = [] } = useOwnedCollections();
   const [collapsed, setCollapsed] = useState(false);
 
   const sidebarCollections = useMemo(
@@ -38,7 +38,6 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
       collections.map((collection) => ({
         address: collection.address,
         name: collection.name,
-        projectId: collection.projectId,
         imageUrl: getCollectionBannerImage(collection.name),
       })),
     [collections],

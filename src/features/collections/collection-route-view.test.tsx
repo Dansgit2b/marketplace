@@ -40,6 +40,8 @@ const {
   };
 });
 
+vi.mock("./use-sweep-candidates",()=>({useSweepCandidates:()=>({data:(mockUseCollectionListingsQuery()?.data??[]).map((o:Record<string,unknown>)=>({orderId:String(o.id),collection:"0xabc",tokenId:String(o.tokenId),price:String(o.price),currency:String(o.currency),quantity:"1"})).sort((a:{price:string},b:{price:string})=>Number(BigInt(a.price)-BigInt(b.price)))})}));
+
 const mockUseCollectionTokensQuery = vi.fn();
 
 vi.mock("@/lib/marketplace/hooks", () => ({
@@ -260,9 +262,9 @@ describe("collection route view", () => {
 
     expect(screen.getByTestId("trait-sidebar-container")).toHaveClass(
       "sticky",
-      "top-20",
+      "top-24",
       "self-start",
-      "max-h-[calc(100vh-6rem)]",
+      "max-h-[calc(100vh-7rem)]",
       "overflow-y-auto",
     );
   });
@@ -614,3 +616,5 @@ describe("collection route view", () => {
     });
   });
 });
+
+vi.mock("@/features/trading/collection-tools", () => ({ CollectionTools: () => null }));

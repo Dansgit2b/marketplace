@@ -1,24 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
 
 async function openFirstCollection(page: Page) {
-  const collectionCardLinks = page.locator(
-    "main[data-testid='marketplace-home'] [data-testid='collection-cards-grid'] a[href^='/collections/']",
-  );
-  const heroCollectionLink = page.getByRole("link", { name: "View Collection" });
-
-  const hasCollectionCardLink = (await collectionCardLinks.count()) > 0;
-  const hasHeroCollectionLink = (await heroCollectionLink.count()) > 0;
-  test.skip(
-    !hasCollectionCardLink && !hasHeroCollectionLink,
-    "No collection links available from home.",
-  );
-
-  const targetLink = hasCollectionCardLink
-    ? collectionCardLinks.first()
-    : heroCollectionLink.first();
-
-  await expect(targetLink).toBeVisible();
-  await targetLink.click();
+  const link=page.getByRole('link',{name:'View Collection',exact:true});
+  await expect(link).toBeVisible();await link.click();
 }
 
 test.describe("purchase funnel skeleton", () => {
@@ -37,8 +21,9 @@ test.describe("purchase funnel skeleton", () => {
     await page.waitForURL(/\/collections\//, { timeout: 30_000 });
 
     const addButtons = page
-      .getByRole("button", { name: "Add to cart" })
+      .getByRole("button", { name: "Buy Now" })
       .filter({ hasNotText: "Added" });
+    await expect(addButtons.first()).toBeVisible();
     const hasAddableListing = (await addButtons.count()) > 0;
     test.skip(!hasAddableListing, "No addable listings in active collection.");
 
@@ -54,7 +39,8 @@ test.describe("purchase funnel skeleton", () => {
     await openFirstCollection(page);
     await page.waitForURL(/\/collections\//, { timeout: 30_000 });
 
-    const tokenLinks = page.locator("a[aria-label^='token-']");
+    const tokenLinks = page.getByRole("link", {name:"View",exact:true});
+    await expect(tokenLinks.first()).toBeVisible();
     const hasTokenLink = (await tokenLinks.count()) > 0;
     test.skip(!hasTokenLink, "No token cards available in collection grid.");
 
@@ -77,28 +63,11 @@ test.describe("purchase funnel skeleton", () => {
     await expect(page.locator("main[data-testid='portfolio-view']")).toBeVisible();
     await expect(page.getByRole("heading", { name: /portfolio/i })).toBeVisible();
 
+    await expect(page.getByText("Demo data · trading disabled")).toBeVisible();
     await page.getByRole("textbox", { name: /wallet address/i }).fill("0x1");
     await page.getByRole("button", { name: /load holdings/i }).click();
 
-    const profileViewVisible =
-      (await page.locator("[data-testid='wallet-profile-view']").count()) > 0;
-    test.skip(
-      !profileViewVisible,
-      "Portfolio holdings view did not initialize in this environment.",
-    );
-
-    await expect(
-      page.getByRole("textbox", { name: /wallet address/i }),
-    ).toHaveValue("0x1");
-
-    const emptyStateVisible =
-      (await page.getByText(/no items found for this wallet/i).count()) > 0;
-    test.skip(emptyStateVisible, "No holdings available for test wallet.");
-
-    const errorStateVisible =
-      (await page.getByText(/unable to load wallet items right now/i).count()) > 0;
-    test.skip(errorStateVisible, "Portfolio query unavailable in current environment.");
-
+    await expect(page.getByTestId('wallet-profile-view')).toBeVisible();
     const firstTokenLink = page.getByRole("link", { name: /view token/i }).first();
     await expect(firstTokenLink).toBeVisible();
     await firstTokenLink.click();

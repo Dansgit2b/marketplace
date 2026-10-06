@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { Exo_2, Geist_Mono } from "next/font/google";
+import { MarketToolbar } from "@/features/trading/market-toolbar";
 import { Header } from "@/components/layout/header";
 import { SidebarLayout } from "@/components/layout/sidebar-layout";
 import { MarketplaceProvider } from "@/components/providers/marketplace-provider";
@@ -40,7 +41,7 @@ export default function RootLayout({
           <Suspense fallback={null}>
             <Header />
           </Suspense>
-          <SidebarLayout>{children}</SidebarLayout>
+          <SidebarLayout><MarketToolbar />{children}</SidebarLayout>
         </MarketplaceProvider>
       </body>
     </html>

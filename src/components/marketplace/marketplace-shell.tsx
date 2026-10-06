@@ -1,13 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { NormalizedToken } from "@cartridge/arcade/marketplace";
+import type { NormalizedToken } from "@/lib/marketplace/types";
 import {
   useMarketplaceClient,
   useMarketplaceCollection,
   useMarketplaceCollectionListings,
   useMarketplaceCollectionTokens,
-} from "@cartridge/arcade/marketplace/react";
+} from "@/lib/marketplace/react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";

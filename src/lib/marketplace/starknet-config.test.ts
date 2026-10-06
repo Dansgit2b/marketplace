@@ -22,7 +22,7 @@ vi.mock("@cartridge/connector", () => ({
 import { buildStarknetConfig } from "@/lib/marketplace/starknet-config";
 
 describe("starknet config", () => {
-  it("maps SN_MAIN chain label to cartridge-backed mainnet defaults", () => {
+  it("maps SN_MAIN chain label to owned RPC mainnet defaults", () => {
     const config = buildStarknetConfig("SN_MAIN");
 
     expect(mockControllerConnectorOptions).toHaveBeenCalledWith(undefined);
@@ -38,10 +38,10 @@ describe("starknet config", () => {
     expect(mainnetProvider).not.toBeNull();
     expect(sepoliaProvider).not.toBeNull();
     expect(mainnetProvider?.channel.nodeUrl).toContain(
-      "https://api.cartridge.gg/x/starknet/mainnet",
+      "/api/marketplace/rpc",
     );
     expect(sepoliaProvider?.channel.nodeUrl).toContain(
-      "https://api.cartridge.gg/x/starknet/sepolia",
+      "/api/marketplace/rpc",
     );
   });
 

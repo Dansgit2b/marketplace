@@ -1,5 +1,6 @@
 "use client";
 
+import { GlobalSearch } from "@/features/trading/global-search";
 import { useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import { HeroBanner } from "@/features/home/hero-banner";
@@ -16,7 +17,7 @@ export function MarketplaceHome() {
   const {
     featuredCollection,
     collectionCards,
-    isLoading,
+    isLoading,isError,refetch,
   } = useHomePageData();
 
   const filteredCollections = useMemo(
@@ -46,6 +47,9 @@ export function MarketplaceHome() {
     staggerDelay: 50,
     translateY: 10,
   });
+
+  if(isError)return <main className="p-8"><p role="alert" className="text-muted-foreground">Unable to load marketplace collections.</p><button className="mt-3 text-primary underline" onClick={()=>void refetch?.()}>Retry</button></main>;
+  if (query) return <GlobalSearch query={query} />;
 
   if (!isLoading && collectionCards.length === 0) {
     return (

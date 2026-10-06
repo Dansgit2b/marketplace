@@ -1,8 +1,9 @@
 "use client";
+import {formatCurrencyAmount} from "@/lib/marketplace/amount-display";
 
 import React, { useMemo } from "react";
 import Link from "next/link";
-import type { NormalizedToken } from "@cartridge/arcade/marketplace";
+import type { NormalizedToken } from "@/lib/marketplace/types";
 import {
   displayTokenId,
   formatPriceForDisplay,
@@ -57,7 +58,7 @@ export const MarketplaceTokenCard = React.memo(function MarketplaceTokenCard({
   mediaImageClassName,
 }: MarketplaceTokenCardProps) {
   const image = tokenImage(token);
-  const displayPrice = formatPriceForDisplay(price);
+  const displayPrice = token.amountsInBaseUnits && price!=null ? formatCurrencyAmount(price,currency??undefined) : formatPriceForDisplay(price);
   const attributes = useMemo(() => tokenAttributes(token.metadata), [token.metadata]);
   const interactiveContent = (
     <>

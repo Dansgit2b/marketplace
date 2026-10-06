@@ -1,7 +1,10 @@
 "use client";
+import {formatCurrencyAmount} from "@/lib/marketplace/amount-display";
 
+import { useSweepCandidates } from "./use-sweep-candidates";
+import { CollectionTools } from "@/features/trading/collection-tools";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import type { NormalizedToken } from "@cartridge/arcade/marketplace";
+import type { NormalizedToken } from "@/lib/marketplace/types";
 import {
   useCollectionListingsQuery,
   useCollectionQuery,
@@ -41,7 +44,6 @@ import {
 } from "@/lib/marketplace/collection-filter-config";
 import { getCollectionBannerImage } from "@/lib/marketplace/collection-banners";
 import {
-  cartItemFromTokenListing,
   cheapestListingByTokenId,
 } from "@/features/cart/listing-utils";
 import { CART_MAX_ITEMS, useCartStore } from "@/features/cart/store/cart-store";
@@ -99,7 +101,7 @@ function collectionHeaderImage(metadata: unknown) {
 }
 
 function floorFromListings(
-  cheapestListings: Map<string, { price: string; currency: string }>,
+  cheapestListings: Map<string, { price: string; currency: string; orderId?:string }>,
 ): { price: string; currency: string } | null {
   let min: bigint | null = null;
   let currency = "";
@@ -120,22 +122,9 @@ function floorFromListings(
     return null;
   }
 
-  const price = formatPriceForDisplay(min.toString());
+  const owned=[...cheapestListings.values()].some(l=>l.orderId?.includes(':'));
+  const price = owned ? formatCurrencyAmount(min,currency) : formatPriceForDisplay(min.toString());
   return price ? { price, currency } : null;
-}
-
-function compareBigIntStrings(left: string, right: string) {
-  try {
-    const leftValue = BigInt(left);
-    const rightValue = BigInt(right);
-    if (leftValue === rightValue) {
-      return 0;
-    }
-
-    return leftValue < rightValue ? -1 : 1;
-  } catch {
-    return left.localeCompare(right);
-  }
 }
 
 function isSortOptionActive(
@@ -311,42 +300,16 @@ export function CollectionRouteView({
       ? `${COLLECTION_LISTING_SAMPLE_LIMIT}+`
       : String(listingCount);
 
-  const sweepCandidates = useMemo(() => {
-    if (!visibleTokens.length) return [];
-
-    const tokenByDisplayId = new Map(
-      visibleTokens.map((token) => [displayTokenId(token), token] as const),
-    );
-
-    const candidates = Array.from(cheapestListings.values())
-      .filter((listing) => !cartOrderIds.has(listing.orderId))
-      .map((listing) => {
-        const token = tokenByDisplayId.get(listing.tokenId);
-        if (!token) return null;
-        return cartItemFromTokenListing(token, address, listing, projectId);
-      })
-      .filter((item): item is NonNullable<typeof item> => item !== null)
-      .sort((left, right) => compareBigIntStrings(left.price, right.price));
-
-    return candidates.slice(0, CART_MAX_ITEMS);
-  }, [address, cartOrderIds, cheapestListings, projectId, visibleTokens]);
-
-  // Build the preview set directly from cheapestListings (same key format
-  // the grid uses for lookup) so highlighting doesn't depend on listedTokensQuery.
-  const cheapestByPrice = useMemo(() => {
-    return Array.from(cheapestListings.entries())
-      .filter(([, listing]) => !cartOrderIds.has(listing.orderId))
-      .sort(([, a], [, b]) => compareBigIntStrings(a.price, b.price));
-  }, [cartOrderIds, cheapestListings]);
-
+  const sweepQuery = useSweepCandidates(address,resolvedActiveFilters);
+  const sweepCandidates = (sweepQuery.data ?? []).filter(item=>!cartOrderIds.has(item.orderId)).slice(0,CART_MAX_ITEMS);
   const sweepMaxCount = Math.min(
-    cheapestByPrice.length,
+    sweepCandidates.length,
     Math.max(CART_MAX_ITEMS - cartItems.length, 0),
   );
   const clampedSweepCount = Math.min(sweepCount, sweepMaxCount);
   const sweepPreviewTokenIds = useMemo(
-    () => new Set(cheapestByPrice.slice(0, clampedSweepCount).map(([tokenId]) => tokenId)),
-    [cheapestByPrice, clampedSweepCount],
+    () => new Set(sweepCandidates.slice(0, clampedSweepCount).map(item => item.tokenId)),
+    [sweepCandidates, clampedSweepCount],
   );
   const handleTokensChange = useCallback((tokens: NormalizedToken[]) => {
     setVisibleTokensByScope((current) => {
@@ -502,7 +465,8 @@ export function CollectionRouteView({
         </div>
 
         <div className="w-full space-y-4" data-testid="collection-content-container">
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <CollectionTools address={address} />
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <div className="flex items-center justify-between gap-3">
               <TabsList>
                 <TabsTrigger value="tokens">Tokens</TabsTrigger>

@@ -5,7 +5,7 @@ import type { MarketplaceRuntimeConfig } from "@/lib/marketplace/config";
 
 type MarketplaceChainLabel = MarketplaceRuntimeConfig["chainLabel"];
 
-const CARTRIDGE_RPC_BASE_URL = "https://api.cartridge.gg/x/starknet";
+
 
 let _controllerConnector: ControllerConnector | null = null;
 function getControllerConnector() {
@@ -19,8 +19,8 @@ export function buildStarknetConfig(chainLabel: MarketplaceChainLabel) {
   return {
     chains: [mainnet, sepolia],
     provider: jsonRpcProvider({
-      rpc: (chain) => ({
-        nodeUrl: `${CARTRIDGE_RPC_BASE_URL}/${chain.network}`,
+      rpc: () => ({
+        nodeUrl: process.env.NEXT_PUBLIC_STARKNET_RPC_URL ?? (typeof window !== "undefined" ? `${window.location.origin}/api/marketplace/rpc` : `${process.env.MARKETPLACE_API_URL ?? "http://127.0.0.1:3100"}/rpc`),
       }),
     }),
     explorer: cartridge,
@@ -28,7 +28,7 @@ export function buildStarknetConfig(chainLabel: MarketplaceChainLabel) {
     defaultChainId:
       chainLabel === "SN_MAIN"
         ? mainnet.id
-        : chainLabel === "SN_SEPOLIA"
+        : (chainLabel === "SN_SEPOLIA" || chainLabel === "LOCAL")
           ? sepolia.id
           : undefined,
   };

@@ -2,7 +2,7 @@ import { createStore } from "zustand/vanilla";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
-export const CART_STORAGE_KEY = "marketplace-cart-v1";
+export const CART_STORAGE_KEY = "marketplace-cart-v2";
 export const CART_MAX_ITEMS = 25;
 
 export type CartItem = {
@@ -82,12 +82,17 @@ function applyAddItem(
   return { ok: true };
 }
 
+function legacyCartNotice() {
+  if(typeof localStorage==='undefined')return null;
+  try {return localStorage.getItem('marketplace-cart-v1')&&!localStorage.getItem(CART_STORAGE_KEY)?'Items from the previous marketplace were cleared. Add current listings to use the new contract.':null;}catch{return null;}
+}
+
 const createState = persist<CartStoreState>(
   (set, get) => ({
     items: [],
     isOpen: false,
     inlineErrors: {},
-    lastActionError: null,
+    lastActionError: legacyCartNotice(),
     addItem: (item) => {
       const result = applyAddItem(get(), item);
       if (!result.ok) {

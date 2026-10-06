@@ -42,3 +42,26 @@ yarn-error.log*
 next-env.d.ts
 
 certificates
+
+# Local investigation and agent caches
+/.context/
+/.claude/tsc-cache/
+
+# Cairo builds and local databases
+/contracts/**/target/
+/contracts/**/.snfoundry_cache/
+/services/**/data/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+
+/output/
+/.playwright-cli/
+.env.backend
+.env.frontend
+!.env.backend.example
+!.env.frontend.example
+/test-results/
+/playwright-report/
+/coverage/
+/artifacts/

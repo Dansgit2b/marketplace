@@ -1,157 +1,71 @@
 # Biblio Marketplace
 
-```text
- __  __            _        _         _
-|  \/  | __ _ _ __| | _____| |_ _ __ | | __ _  ___ ___
-| |\/| |/ _` | '__| |/ / _ \ __| '_ \| |/ _` |/ __/ _ \\
-| |  | | (_| | |  |   <  __/ |_| |_) | | (_| | (_|  __/
-|_|  |_|\__,_|_|  |_|\_\___|\__| .__/|_|\__,_|\___\___|
-                               |_|
+A Starknet ERC-721 marketplace with standalone Cairo settlement, an owned Node.js indexer/API, and the retained Next.js UI. Trading uses on-chain listings, token offers, one-shot collection offers and atomic carts of up to 25 NFTs in one currency.
+
+The backend uses Node built-ins only. It has no Torii, Dojo or Arcade dependency. Cartridge remains an optional wallet connector; it supplies no marketplace data. Wallet RPC defaults to the owned backend relay, with a configurable direct RPC override.
+
+## Run locally
+
+Use Node **22.22.0** and pnpm **10.8.1**.
+
+```sh
+pnpm install --frozen-lockfile
+pnpm backend:demo
 ```
 
-A Next.js App Router NFT marketplace for the Realms ecosystem, powered by `@cartridge/arcade`, with a strict `shadcn/ui` + Tailwind token UI approach.
+In another terminal:
 
-## What Is Implemented
-
-- Multi-collection home discovery with search and collection rows.
-- Collection route with trait filters, URL-synced query state, token grid, and market activity tabs.
-- Token detail route with listing table, add-to-cart actions, listing/offer/cancel actions, and fee/royalty estimate card.
-- Persisted cart sidebar with stale-listing validation, inline row errors, and single-transaction checkout.
-- Portfolio route (`/portfolio`) for arbitrary wallet lookup.
-- Wallet profile route (`/profile/[address]`) and ops diagnostics route (`/ops`).
-- Dynamic SEO metadata and OpenGraph image routes for collections and tokens.
-
-## Multi-Currency Behavior
-
-This marketplace is multi-currency at the listing, wallet, and checkout execution layers.
-
-- Listing/offer flows support multiple Starknet tokens: `STRK`, `LORDS`, and `SURVIVO`.
-- Token and cart UI resolve currency symbol/icon from token contract addresses (`TokenSymbol` + `getTokenSymbol`).
-- Connected-wallet dropdown fetches balances for STRK/LORDS/SURVIVO.
-- Checkout calls are built with each listing's currency and a currency-specific fee receiver.
-- Important constraint: the cart intentionally enforces **single-currency per checkout** (no mixed-currency cart execution) and a max of 25 items.
-
-## Stack
-
-- Next.js `16.1.6` (App Router) + React `19`
-- TypeScript
-- Tailwind CSS v4
-- `shadcn/ui` primitives
-- `@cartridge/arcade` marketplace SDK
-- Zustand (cart persistence)
-- TanStack Query
-- Vitest + React Testing Library + MSW
-- Playwright e2e + screenshot capture in CI
-
-## Project Layout
-
-- `src/app/*`: App Router routes + metadata + API routes
-- `src/features/*`: feature modules (`collections`, `token`, `cart`, `portfolio`, `profile`, `ops`)
-- `src/components/ui/*`: shadcn primitives
-- `src/components/layout/*`: header + wallet UI
-- `src/components/marketplace/*`: home/row/card presentation
-- `src/components/providers/*`: marketplace/starknet/query provider wiring
-- `src/lib/marketplace/*`: runtime config, hooks, fees, token display helpers
-- `src/test/*`: Vitest setup + MSW server/handlers
-- `tests/e2e/*`: Playwright flows and screenshot tests
-- `scripts/ci/*`: feature-route detection and CI helper scripts
-
-## Local Setup
-
-Prereqs:
-
-- Node.js `20.x`
-- npm `>=10` or pnpm `10.x`
-
-Install dependencies (CI uses pnpm):
-
-```bash
-pnpm install
-# or: npm install
+```sh
+NEXT_PUBLIC_MARKETPLACE_CHAIN_ID=SN_MAIN pnpm dev
 ```
 
-Create/update `.env.local`:
+Open `http://localhost:3000`. Demo assets and orders are illustrative; all wallet trading is disabled. Collection discovery, filters, token details, cart previews, search and the disconnected dashboard work without production credentials.
 
-```env
-NEXT_PUBLIC_MARKETPLACE_CHAIN_ID=SN_SEPOLIA
-NEXT_PUBLIC_MARKETPLACE_DEFAULT_PROJECT=
-NEXT_PUBLIC_MARKETPLACE_COLLECTIONS=0x123...|Genesis|project-a,0x456...|Artifacts|project-b
-NEXT_PUBLIC_SITE_URL=http://localhost:3000
+For a real deployment, use [.env.backend.example](.env.backend.example) and [.env.frontend.example](.env.frontend.example). Supply the RPC, verified marketplace address/class/start block, registry and frontend address. Keep existing local settings and secrets private. Run API, index and metadata workers separately:
+
+```sh
+node --env-file=.env.backend services/marketplace-backend/src/server.mjs
+node --env-file=.env.backend services/marketplace-backend/src/worker.mjs index
+node --env-file=.env.backend services/marketplace-backend/src/worker.mjs metadata
 ```
 
-Notes:
+The API listens on `127.0.0.1:3100`. Next.js proxies `/api/marketplace` to it. A portable backend container topology is in [compose.backend.yml](compose.backend.yml).
 
-- `NEXT_PUBLIC_MARKETPLACE_COLLECTIONS` format is `address|name|projectId` (comma-separated).
-- `address` and `name` are required; `projectId` is optional.
-- Restart dev server after env changes.
+## Contract development
 
-Run:
+Pin Scarb **2.15.1**, Starknet Foundry **0.57.0**, and devnet **0.10.0**. The test wrapper rejects older Foundry versions with different caught-revert behavior.
 
-```bash
-pnpm dev
-# or: npm run dev
+```sh
+pnpm contracts:build
+pnpm contracts:test
 ```
 
-Default URL: `http://localhost:3000`
+For the signed-account integration rehearsal, start devnet on port 5050 with three funded accounts, build the explicit test-asset feature, then run:
 
-If you need HTTPS for wallet testing:
-
-```bash
-brew install mkcert nss
-pnpm dev:https
-# or: npm run dev:https
+```sh
+cd contracts/marketplace
+scarb build --features fixtures
+cd ../..
+pnpm contracts:devnet
 ```
 
-## Scripts
+The script only accepts localhost devnet URLs. It deploys test assets, trades, checks live preflight and wallet authentication, and verifies rewind/replay. Evidence is written to ignored `.context/devnet-evidence.json`. Test assets have unrestricted minting and failure switches and are excluded from normal builds. Never deploy those assets publicly.
 
-```bash
-pnpm dev
-pnpm dev:https
-pnpm lint
+## Verification and scope
+
+```sh
+pnpm backend:test
+pnpm contracts:test
 pnpm typecheck
+pnpm lint
 pnpm test
-pnpm test:coverage
-pnpm test:e2e:install
-pnpm test:e2e
-pnpm test:e2e:screenshots
-pnpm ci:feature-routes
 pnpm build
-pnpm start
+pnpm test:e2e
 ```
 
-## Testing and CI
+Browser tests use the built frontend and a local fixture backend. [The build plan](docs/BUILD-PLAN.md) is the authoritative feature list and acceptance tracker. Local tests and devnet transactions do not replace independent contract review, launch-collection compatibility checks, supported-wallet rehearsal, production backfill or a staging soak.
 
-- Unit/integration: Vitest + RTL + MSW (`src/test/setup.ts`)
-- E2E: Playwright (`tests/e2e/*`) on `http://127.0.0.1:3400`
-- CI workflow: `.github/workflows/ci.yml`
-
-CI verifies:
-
-1. install
-2. lint
-3. typecheck
-4. unit tests with coverage
-5. build
-6. e2e
-7. feature screenshots
-
-Feature screenshots:
-
-- Route selection: `scripts/ci/feature-screenshot-routes.mjs`
-- Spec: `tests/e2e/feature-screenshots.spec.ts`
-- Artifacts: `feature-screenshots-*`, `playwright-artifacts-*`
-
-## Route Map
-
-- `/`: marketplace home
-- `/collections/[address]`: collection view + filters + activity
-- `/collections/[address]/[tokenId]`: token detail + purchase actions
-- `/portfolio`: wallet holdings lookup
-- `/profile/[address]`: wallet profile
-- `/ops`: client diagnostics
-
-## Reference Docs
-
-- Scope: `docs/SCOPE.md`
-- TDD PRD: `docs/TDD-PRD.md`
-- TDD implementation plan: `docs/TDD-IMPLEMENTATION-PLAN.md`
+- [Contract design](docs/CONTRACT-SCOPE.md), [backend design](docs/BACKEND-SCOPE.md), [domain glossary](CONTEXT.md).
+- [Operations and recovery](docs/OPERATIONS.md), [API contract](services/marketplace-backend/openapi.json).
+- [Agent instructions](AGENTS.md).
+- Historical [indexer assessment](docs/INDEXER-CURRENT-STATE-2026-10-06.md), [Arcade assessment](docs/CONTRACT-ASSESSMENT-2026-10-06.md) and [OpenSea comparison](docs/OPENSEA-COVERAGE.md).

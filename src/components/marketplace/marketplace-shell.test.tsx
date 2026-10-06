@@ -22,7 +22,7 @@ const { mockGetMarketplaceRuntimeConfig } = vi.hoisted(() => ({
   mockGetMarketplaceRuntimeConfig: vi.fn(),
 }));
 
-vi.mock("@cartridge/arcade/marketplace/react", () => ({
+vi.mock("@/lib/marketplace/react", () => ({
   useMarketplaceClient: mockUseMarketplaceClient,
   useMarketplaceCollection: mockUseMarketplaceCollection,
   useMarketplaceCollectionTokens: mockUseMarketplaceCollectionTokens,
