@@ -1,10 +1,10 @@
 # Starknet marketplace — full scope and build plan
 
-Version 1.1 · 7 October 2026
+Version 1.2 · 7 October 2026
 
 **Start here.** This is the consolidated project plan. It joins the contract, indexer, API, existing frontend, OpenSea product benchmark, operations and migration into one delivery sequence. It supersedes earlier launch-boundary statements where they differ; supporting documents provide implementation detail and historical evidence.
 
-Status: implementation in progress. **Deployment is blocked by remaining dependency advisories and the launch gates below.** Standalone Cairo settlement, the native Node indexer/API and retained-UI trading flows are implemented locally; integration and acceptance work is ongoing. No production deployment, independent audit, production backfill or staging soak is claimed. Track milestone completion here; supporting designs do not maintain competing status lists.
+Status: implementation in progress. **Deployment remains blocked by the launch gates below.** The production dependency audit passes its high-severity gate; five moderate findings remain tracked in operations. Standalone Cairo settlement, the native Node indexer/API and retained-UI trading flows are implemented locally; integration and acceptance work is ongoing. No production deployment, independent audit, production backfill or staging soak is claimed. Track milestone completion here; supporting designs do not maintain competing status lists.
 
 ## 1. Product outcome
 
@@ -233,7 +233,8 @@ release approval. Demo screenshots and local fixtures do not close launch gates.
 - `pnpm release:verify` pins local fixture settings and runs reproducible SDK,
   backend, Cairo, coverage, build and browser gates; actual deployments require
   a separate build with reviewed environment inputs. `pnpm release:audit` is a
-  separate registry/network gate and currently fails on 19 high findings.
+  separate registry/network gate, now enforced in CI and passing with zero high
+  or critical findings after transitive wallet dependency remediation.
 - Next.js/ESLint config updated to 16.3.6: production audit critical findings
   reduced from 2 to 0. Remaining wallet/transitive findings are detailed in
   [operations](OPERATIONS.md#dependency-audit--7-october-2026).
@@ -305,21 +306,211 @@ Measure Cairo storage writes, execution resources, calldata/events and external 
 
 Proposed initial operating targets: browse p95 under 500 ms; 25-row preflight p95 under 3 seconds; normal p95 relevant-stream lag no more than two accepted blocks; backups at most one hour old and recovery within two hours. Freshness also checks observation age. Validate targets at representative load and revise explicitly if the chosen topology cannot meet them.
 
-## 10. Deployment and migration
+## 10. Launch sequence, indexer rollout and migration
 
-Use distinct devnet, Sepolia/staging and mainnet configuration/state. New contracts need reproducible builds, verified class/address records and recorded administration/fee settings. Pin decoder and API versions to deployments.
+This is the operational launch plan. It is **ready for assigning owners and filling
+inputs, not approved for execution**. Roles below are unassigned. The contract
+commands are in [mainnet deployment](MAINNET-DEPLOYMENT.md); service/backup commands
+are in [operations](OPERATIONS.md). Stages advance on evidence, not calendar dates.
 
-Existing NFTs do not migrate. Existing marketplace approvals and orders do not automatically authorize the replacement. Users approve the new address and recreate intended orders. Inventory old active liquidity first; preserve a clearly labelled legacy read/cancel route where practical rather than mixing execution targets.
+### Current go/no-go position
 
-Roll out browse/holdings, then testnet trading, then new production listings/offers/fills under monitored release controls. A seven-day observation window is part of stabilization evidence, not a substitute for prelaunch review. Contract pause cannot prevent maker cancellation.
+At PR #93 head `984433e`, application CI and the Vercel preview passed. Contract CI
+failed **before running tests**: the runner installed snforge 0.64.1 while the
+wrapper required 0.57.0. The follow-up aligns Foundry and `snforge_std` on 0.64.1,
+updates the setup action to 6.0.0 so it forwards its input, and pins Universal
+Sierra Compiler 2.10.2. All 30 contract tests pass locally; rerun remote CI on the
+updated release commit. See the historical
+[failed contract job](https://github.com/BibliothecaDAO/marketplace/actions/runs/37573161727/job/112636108127).
 
-After orders exist on the new contract, rollback preserves their discoverability/cancellability and uses compatible UI/API versions. Never silently restore old settlement or resubmit user transactions.
+The updated production audit has zero critical/high findings and five moderate
+findings, with the remediation documented in operations. Independent contract
+audit, approved asset/fork/resource checks, real supported
+wallets, hosting/operator choices and live indexer acceptance remain open. Recheck
+CI, audit and artifact hashes on the exact release commit before approval.
+
+### Release stages
+
+| Stage | Work and responsible role | Exit evidence / go-no-go |
+| --- | --- | --- |
+| L0 — release candidate | Release owner + contract/frontend leads: fix CI/toolchain and dependency blockers; finish independent audit/remediation; freeze fee/admin inputs, approved assets and legacy-order policy | Green checks on one committed SHA, resolved high/critical findings, audit report, compatibility matrix and signed scope. Exclude assets requiring unsupported on-chain health/trait eligibility. |
+| L1 — operational foundation | Platform/indexer lead: provision isolated staging and production environments, persistent local storage, RPC/archive access, secrets, logs, alerts, off-host backup and restore target | Container/native boot rehearsal, correct network/class checks, RPC history coverage, protected operator access, tested alert delivery and named incident owner. Can run alongside L0 without public trading. |
+| L2 — public Sepolia + staging soak | Contract/frontend/indexer leads: use the deployment scripts with final account types; rehearse the complete user-to-indexed-result journey and operational failures | Real wallet/multisig signatures, 25-item transaction/resource checks, receipt/index recovery, replay/reorg, RPC outage and backup restore evidence; seven-day staging soak meets agreed operating targets. Local devnet evidence does not satisfy this stage. |
+| L3 — mainnet deployment, trading held | Release owner + multisig: freeze the mainnet plan, declare/deploy, verify receipts and atomically pause/configure the approved asset set | Verified mainnet address/class/constructor, canonical deployment block, paused configuration and generated registry/environment handoff. No public trading yet. |
+| L4 — production indexer acceptance | Indexer lead: create a fresh deployment-bound database, backfill the full registry, reconcile at a fixed block, hydrate metadata, then catch up and tail | Complete per-source history, zero unexplained ownership/order/accounting discrepancies, explicit metadata/media coverage, current live source progress, measured load and a production-size restore rehearsal. Detailed sequence below. |
+| L5 — browse-only cutover | Frontend/platform leads: build for the real deployment, route discovery/holdings to the owned API, preserve the contract pause, validate caches and migration messaging | Public browse/search/portfolio/asset paths work against owned data; wallet actions respect paused state. Proposed observation window: at least 24 hours after catch-up, subject to release-owner approval. |
+| L6 — controlled activation | Release owner + multisig: approve activation evidence, unpause, confirm index reflection, execute small real buyer/seller journeys | No unexplained payment/ownership mismatch; listing, offer, cancellation and atomic-cart results reconcile on-chain and in the API. Initial low-volume observation: proposed 24 hours before broad promotion. |
+| L7 — general availability and expansion | Release/product/operator owners: publish migration/support guidance, widen promotion, monitor a seven-day mainnet stabilization window after activation (not an additional pre-launch wait); onboard additional assets through the expansion procedure | Stable agreed service levels, no unresolved critical incident, tested incident handoff and retained cancellation/recovery paths. Expansion requires its own registry/backfill/asset approval. |
+
+```mermaid
+flowchart LR
+    A[Release and audit gates] --> C[Public Sepolia and staging soak]
+    B[Infrastructure and RPC readiness] --> C
+    C --> D[Mainnet deployment and paused configuration]
+    D --> E[Full historical backfill]
+    E --> F[Fixed-block reconciliation and metadata coverage]
+    F --> G[Catch up and browse-only rollout]
+    G --> H[Separate multisig activation]
+    H --> I[Observe and expand]
+```
+
+“Controlled” does not mean private: v1 has no wallet allowlist or per-user trading
+limit. Once an approved asset is enabled and the market is unpaused, anyone can
+call the contract directly. Real rollout controls are pause and the on-chain
+collection/currency allowlists. A private frontend, hidden collection, verified
+badge or soft launch announcement is not an on-chain access control.
+
+### Indexer rollout: exact order
+
+1. **Prove the RPC operating envelope.** Check the actual chain ID, accepted block
+   hashes, class reads at historical hashes, event continuation, full receipt
+   retrieval and oldest required source blocks. Record provider quotas, timeouts,
+   latency and outage behavior. Reserve enough RPC capacity for live preflight
+   while index/metadata work runs. The current event scan pins pagination to the
+   first RPC endpoint: setting a fallback URL alone does not prove event-range
+   failover. Rehearse an operator-controlled primary switch and/or implement the
+   missing range-level failover before claiming automatic recovery.
+2. **Freeze the final source manifest.** Use the verified deployment's address,
+   class hash and actual initialization block. Each NFT source starts at its
+   independently checked earliest relevant historical block, not the marketplace
+   deployment block. Record source/decoder compatibility and registry checksum.
+   Earlier scratch NFT backfills are useful for measurement but are not directly
+   promotable: changing a database from no marketplace to the new address raises
+   `DATABASE_IDENTITY_MISMATCH`.
+3. **Allocate a fresh production candidate.** Give this chain/deployment its own
+   chain DB, adjacent `.app` DB and asset directory. Run exactly one event scanner:
+   either the backfill CLI or the live index worker, never both against that DB.
+   Keep embedded indexing off in API processes. Start with one API worker; scale
+   within the implemented 1–8 range only after contention/load measurement. One
+   index worker, one metadata worker and APIs share the local persistent volume;
+   metadata/API writes are serialized by SQLite, not independent HA replicas.
+4. **Backfill to a fixed checkpoint H.** Record H and its accepted hash. Run
+   `indexer-cli.mjs backfill` with `MARKETPLACE_STOP_BLOCK=H`, using the final
+   registry and candidate DB. Keep public traffic away from incomplete data.
+   Record blocks/second, events/second, RPC calls, disk/WAL growth and decoder
+   errors. Unknown events, missing receipts, class/network mismatches or coverage
+   errors stop promotion; never advance checkpoints by skipping failures.
+5. **Reconcile before metadata changes the comparison.** With metadata stopped,
+   replay into a second scratch chain DB to the same H/hash and compare results.
+   The existing `reconcile` CLI outputs a digest of head/tokens/orders/config;
+   it is neither a full external reconciliation tool nor a complete policy/stats
+   comparison. Add/check direct `owner_of`, approvals, `get_order`, config and
+   event-derived fees/royalties/volume/floor expectations at H, using a reviewed
+   independent RPC where available. Check all enumerated live token owners and
+   reconcile mint/burn counts against supply/enumeration where supported; merely
+   sampling known IDs cannot prove no tokens were omitted. Require no unexplained
+   difference. For a new
+   empty mainnet marketplace, NFT ownership and initialization/policy history are
+   the main pre-activation checks; order/fill accounting gets its first mainnet
+   evidence during L6. Do not present empty order tables as a trading rehearsal.
+6. **Hydrate and measure metadata/media.** Start the metadata worker after the
+   stable replay comparison. Report total/non-burned tokens, metadata ready/
+   pending/failed, cached-image coverage and oldest refresh age per collection.
+   `metadataStatus=ready` does not prove its image downloaded successfully. Set
+   collection-specific acceptance targets; proposed baseline is at least 99%
+   valid browse metadata, with all remaining failures reviewed and clear image
+   placeholders. A 60-second refresh eligibility interval is not a guarantee the
+   worker can refresh the whole catalog within 60 seconds. Trade-critical game
+   eligibility needs its own authoritative policy; metadata coverage cannot add
+   missing contract restrictions.
+7. **Catch up, then tail.** Stop the bounded backfill process. Remove the fixed
+   stop-block setting from operational configuration and start the sole live
+   index worker, metadata worker and API. Verify every required source's block/
+   hash, not just the global head. While paused, the expected eventual readiness
+   reason is only `PAUSED`; `SOURCES_SYNCING`, `HEAD_STALE`, `INDEX_STALE`,
+   `IDENTITY_UNVERIFIED` and `RPC_ERROR` must be absent before promotion.
+8. **Rehearse recovery and promote the data release.** Produce a paired chain/app
+   backup plus registry and assets; restore it on an isolated host, run integrity
+   and reconciliation checks, and measure recovery time. Test stopping/restarting
+   the scanner, RPC loss/switch and metadata failures. Before serving this release,
+   record release SHA, DB identity, source checkpoints, metadata report, backup
+   identifier and operator approval. Poll live freshness after the API switch.
+
+The CLI currently uses 100-block backfill windows; the index worker also uses
+100-block windows and the metadata worker processes up to ten tokens per pass.
+Measure throughput before changing concurrency. Estimate remaining history from
+`(H - current indexed block) / observed blocks per second`, revise across dense
+periods, and include metadata/replay verification time. There is no measured
+production backfill duration yet and no launch-date promise based on fixture SQL
+benchmarks.
+
+### Acceptance and monitoring
+
+| Signal | Required interpretation / proposed objective | Action |
+| --- | --- | --- |
+| `/health/live` | Process liveness only | Restart/route investigation for a dead process; do not mistake liveness for correct data |
+| `/health/ready` | Trading readiness; intentionally 503 while paused | Use source/status and browse probes during L4–L5, not this endpoint as a public-browse load-balancer gate |
+| Source freshness | Current code rejects checkout above 2 blocks of relevant-source lag or after 15 seconds without an observed head; these values are currently hardcoded | Alert on sustained unhealthy status; keep writes blocked, diagnose worker/RPC, never relax limits merely to get green |
+| Correctness | Zero unexplained ownership/order/accounting or canonical-history discrepancies | Halt promotion or pause trading; preserve receipts/journal and reconcile |
+| API and preflight load | Proposed browse p95 <500ms and 25-item preflight p95 <3s at the agreed workload (initial planning case: 50 browse requests/s + one preflight/s) | Size against measurements; fixture SQL timings are not HTTP/RPC capacity evidence |
+| Metadata/media | Per-collection coverage and oldest-age targets signed off at L4; metadata and image success tracked separately | Repair/retry sources; do not silently describe unknown eligibility as tradable |
+| Recovery | Proposed off-host backup age ≤1 hour and production-size restore ≤2 hours | Alert on missed backups, validate restores; chain data can replay, lost application state cannot be recreated from the chain |
+| Storage and quotas | Disk/WAL growth, free-space runway, RPC throttling and worker error age | Set measured warning/critical thresholds, test delivery and assign an incident owner before activation |
+
+These are release criteria and monitoring work, not a claim that an alerting
+platform, coverage dashboard or full reconciliation automation is already deployed.
+Collection verification badges and metadata completeness are not checks inside
+`safeForCheckout`; obtain separate operator evidence. The one-host SQLite topology
+has an explicit outage/restore tradeoff and does not establish 99.9% availability.
+
+### Cutover, rollback and later collections
+
+- **Initial frontend cutover:** build with the new deployment's public chain/address
+  and API destination; confirm `/api/marketplace`, `/rpc`, owned media and SEO reads.
+  Purge prior build/CDN caches as appropriate and test deployment-bound cart/cache
+  identities. Keep trading paused until independent activation approval. Existing
+  NFTs stay in place; old Arcade approvals/orders do not authorize the replacement.
+  Publish the new spender address, approval flow and an explicit legacy read/cancel
+  decision. Never copy old orders into new executable orders for users.
+- **Software rollback before activation:** preserve the new deployment and paused
+  state; switch only to a release compatible with the same ABI, DB and app state.
+  Do not route writes to the old marketplace or silently replace deployment IDs.
+- **Incident after activation:** the multisig pauses the contract if settlement or
+  data integrity is in doubt. Record the pause receipt and index reflection, retain
+  browse/recovery where trustworthy, and preserve cancellation access. Disabling UI
+  buttons alone cannot stop direct contract calls. The pause is not instantaneous:
+  transactions ordered before it may settle and must be reconciled. Retain submitted
+  hashes; never replay user transactions automatically.
+- **Database replacement/restore:** stop API application writes, metadata and the
+  index worker for the final paired checkpoint/backup. Restore/copy databases using
+  SQLite backup facilities or a fully stopped, correctly checkpointed dataset—not
+  an arbitrary copy of a live WAL database. Preserve the latest `.app` state; its
+  sessions, reports, moderation, verification and notification read state are not
+  disposable. Runtime derives its path as `<chain DB path>.app`, so a renamed chain
+  DB needs the intended app DB alongside it. Verify both before restarting.
+- **Expansion:** approve the next collection/currency and its policy separately.
+  Build a replacement chain DB with the complete expanded registry from historical
+  starts; the existing live DB can keep tailing independently. Catch the replacement
+  up, reconcile, then perform a paused, quiesced cutover carrying forward the latest
+  app DB. Do not append an old historical source to a live DB and bypass
+  `SOURCE_BACKFILL_REQUIRED`. Enable new assets only after data coverage is proven.
+  Retain the original deployment plan; approved policy expansion needs a new
+  governance record and verifier expectations—the frozen initial plan intentionally
+  rejects unexpected enabled assets. Expansion automation is still to be built.
+
+### Immediate work queue
+
+1. Release/contract lead: correct CI's snforge pin and obtain green contract CI on
+   the release SHA; track remaining moderate wallet advisories and commission independent
+   review. These are blockers, not launch-day tasks.
+2. Product/release owner: choose the first on-chain asset set, eligibility policy,
+   fee/admin/deployer inputs, legacy-order handling and named operational owners.
+3. Platform/indexer lead: choose host/domain/archive RPC, persistency and backup
+   destinations; measure historical throughput and validate the pinned-endpoint
+   outage/switch behavior. Current Compose topology is a starting deployment recipe.
+4. Indexer lead: implement the fixed-checkpoint external reconciliation report,
+   metadata/media coverage report, monitoring/alerts and replacement-DB promotion
+   procedure; rehearse them at representative size.
+5. Frontend/contract/indexer leads: run public Sepolia wallets/multisig and recovery
+   journeys; start the seven-day staging evidence window only after those pass.
+6. Release owner: review the evidence packet and schedule L3–L6 together with the
+   multisig and operator; publish a date only once backfill and recovery are measured.
 
 ## 11. Scheduling, cost and ownership
 
 The earlier indexer-only/Torii estimates no longer apply. This includes a new financial contract, an independent indexer, broader product workflows and external review.
 
-Time-box the initial interface/reference vertical-slice investigation to approximately five engineering days, reporting what is proved and what remains. Then estimate each milestone from measured contract test/compile costs, replay throughput, metadata volume and reusable frontend coverage. The time-box is not a promise that M0–M2 will all finish in five days.
+The initial implementation slice is complete locally. Schedule launch from measured backfill/metadata throughput, independent-review availability, supported-wallet rehearsal and recovery drills. L0 and L1 can proceed in parallel; the seven-day staging soak is an existing release gate. The proposed 24-hour browse-only and initial activation observation windows in section 10 need release-owner agreement. Material fixes restart the affected validation window; audit and backfill lead times remain unknown.
 
 Before scheduling mainnet, assign a Cairo lead, backend/indexing lead, frontend lead, independent reviewer and release/operator responsibility. People may hold multiple roles, but scheduling must account for that. Book external review availability early. No delivery date or monthly hosting figure is asserted without staffing, audit availability, workload and provider pricing.
 

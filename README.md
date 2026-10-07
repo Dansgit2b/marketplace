@@ -72,7 +72,7 @@ pnpm contracts:deploy:rehearse
 
 ## Contract development
 
-Pin Scarb **2.15.1**, Starknet Foundry **0.57.0**, and devnet **0.10.0**. The test wrapper rejects older Foundry versions with different caught-revert behavior.
+Pin Scarb **2.15.1**, Starknet Foundry **0.64.1**, Universal Sierra Compiler **2.10.2**, and devnet **0.10.0**. The test wrapper requires the pinned Foundry version to match `snforge_std`; CI installs the same versions. Foundry recommends a newer Scarb, but this compiler is retained to preserve the reviewed production artifacts; the contract suite passes with it.
 
 ```sh
 pnpm contracts:build

@@ -62,6 +62,39 @@ Do not copy fixture databases, test assets or devnet addresses into a deployment
 from container build contexts. Archive investigation output under `.context/archive`;
 keep active server logs and `.context/toolchain` available to their running tools.
 
+## Indexer rollout order
+
+Use the [launch plan](BUILD-PLAN.md#10-launch-sequence-indexer-rollout-and-migration)
+for stage ownership and go/no-go criteria. After the mainnet contract is deployed
+and configured paused, use its exported registry in a **new** chain database.
+The native bootstrap sequence below assumes `.env.backend` points to that registry,
+DB and asset directory and no live index worker is running against the candidate:
+
+```sh
+# Set CHECKPOINT_HEIGHT to an independently recorded accepted block H.
+: "${CHECKPOINT_HEIGHT:?Set the reviewed checkpoint height first}"
+MARKETPLACE_STOP_BLOCK="$CHECKPOINT_HEIGHT" node --env-file=.env.backend services/marketplace-backend/src/indexer-cli.mjs backfill
+node --env-file=.env.backend services/marketplace-backend/src/indexer-cli.mjs reconcile
+```
+
+Record H's hash and compare at that same hash. The second command is a projection
+digest, not external chain reconciliation; compare before starting metadata, whose
+fetched data/timestamps can change the digest. After the backfill exits and its
+verification passes, start one live `worker.mjs index`, one `worker.mjs metadata`
+and the API using the native commands in README or the equivalent supervised
+services. Never run the bounded backfill and live scanner on the same DB together.
+
+While paused, `/health/ready` returns 503 by design. Use `/health/live`, catalog
+browse probes and `/v1/chains/{chain}/indexer/status`; after catch-up the remaining
+readiness reason should be `PAUSED` only. Source progress, metadata/media coverage
+and collection trust approval are separate acceptance evidence. The ready check
+currently hardcodes a 2-block lag and 15-second head-observation limit.
+
+`MARKETPLACE_RPC_FALLBACK_URL` can cover ordinary transport calls, but event-page
+requests explicitly pin the first endpoint. Rehearse an operator-controlled primary
+swap/restart; do not claim automatic event-range failover from the fallback setting
+alone. Replacing the primary must retain the same chain and reviewed source history.
+
 ## Collection onboarding
 
 1. Verify contract address/class, ERC-721 interface, transfer/approval layouts, token URI encoding, royalties, dynamic metadata and any game eligibility rules at a fixed checkpoint. Determine the earliest required historical block.
@@ -87,7 +120,7 @@ For a rewind, stop the index worker and run `indexer-cli.mjs rewind HEIGHT`, the
 ## Health and incidents
 
 - `/health/live`: process liveness.
-- `/health/ready`: trading readiness (503 while undeployed, stale, paused, unverified or syncing).
+- `/health/ready`: trading readiness (503 while undeployed, stale, paused, identity-unverified or syncing). Collection verification badges and metadata coverage are separate operator checks.
 - `/v1/chains/{chain}/indexer/status`: source progress, observed head/time, lag, generation and blocking reasons.
 - Worker stdout/stderr: structured progress/error records. Alert on stopped workers, lag, stale observations, identity errors, failed backups, disk pressure and metadata failures.
 
@@ -106,15 +139,38 @@ Wallet sessions use single-use, five-minute, origin-bound SNIP-12 challenges and
 Production dependency audit initially reported 2 critical, 41 high, 50 moderate
 and 4 low findings. Next.js and its ESLint configuration were updated from
 16.1.6 to 16.3.6; compatible-range transitive updates were applied. The resulting
-registry report is **0 critical, 19 high, 33 moderate and 1 low**. Advisory counts
+registry report was **0 critical, 19 high, 33 moderate and 1 low**. Advisory counts
 are not proof that every affected code path is exposed by this application.
 
-The remaining high findings involve `axios`, `defu`, `form-data`, `h3` and `ws`
-under Controller/WalletConnect and related wallet packages. They need supported
-upstream upgrades or reviewed replacements, followed by real-wallet rehearsal.
-No forced cross-range overrides or advisory suppression were added.
-`pnpm release:audit` currently fails and blocks deployment. Re-run it against the
-final lockfile; a passing fixture verification does not override this gate.
+The follow-up remediation resolves all 19 high findings with same-major transitive
+overrides in `pnpm-workspace.yaml`: `axios` 1.20.0, `defu` 6.1.5, `form-data` 4.0.6,
+`h3` 1.15.9, and `ws` 8.21.0 / 7.5.11. The WebSocket overrides target the wallet
+parents individually so their 7.x and 8.x peer contracts remain intact. The current
+production report is **0 critical, 0 high, 5 moderate and 0 low**; no advisories are
+suppressed. The five moderate findings concern `bn.js`, `uuid` and `stream-json`.
+`pnpm release:audit` passes and is now a CI gate. Re-run it against the final
+lockfile; a passing fixture verification does not override this gate.
+
+Remove the overrides once upstream packages resolve patched versions. Cartridge
+0.14.2 moves to Starknet.js 10 and the renamed wallet interface package, so that
+API migration is separate from this remediation. The retained wallet stack still
+needs real-wallet rehearsal and its existing React peer mismatch remains open.
+
+Starknet Foundry (`snforge` and `sncast`) and `snforge_std` now use **0.64.1**;
+Universal Sierra Compiler uses **2.10.2**. Official macOS arm64 archives were checked
+against GitHub release SHA-256 digests before installation. Scarb remains **2.15.1**
+to preserve production artifacts. Foundry recommends Scarb 2.18.0 or newer, but all
+30 contract tests, including 512 fuzz cases, pass on the pinned compiler. CI uses
+`setup-snfoundry` 6.0.0, whose composite action forwards the requested version;
+the old v4 action did not forward that input to its implementation.
+
+Post-remediation `pnpm install --frozen-lockfile`, `pnpm release:audit` and the full
+`pnpm release:verify` passed locally: 587 unit/Storybook tests, 40 SDK tests plus
+packed consumers, 34 backend tests, 30 Cairo tests, lint/typecheck, Next/Storybook
+builds and four browser smoke flows (one optional screenshot test skipped).
+Coverage remains 81.97% statements / 70.67% branches. A non-fixture build matches
+the checked-in class hash, compiled class hash, source hash and ABI. These are
+fixture regressions, not supported-wallet signing or production launch evidence.
 
 The Next.js update covers the reported
 [AVIF optimization advisory](https://github.com/advisories/GHSA-2xp9-vwfh-vxw4)

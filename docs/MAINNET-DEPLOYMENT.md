@@ -155,6 +155,12 @@ and `execute`; they are trusted executable local code, not downloaded plugins.
 
 ## 5. Verify and hand off while paused
 
+Continue with the [indexer launch stages](BUILD-PLAN.md#10-launch-sequence-indexer-rollout-and-migration)
+and [native bootstrap sequence](OPERATIONS.md#indexer-rollout-order) before activation.
+The indexer needs a fresh deployment-bound DB, full NFT history, fixed-block
+reconciliation, metadata coverage and live catch-up; exporting a registry alone
+is not indexer rollout completion.
+
 ```sh
 node --env-file=.env.deployment scripts/deployment/cli.mjs verify --plan .context/deployments/mainnet/plan.json
 node --env-file=.env.deployment scripts/deployment/cli.mjs export --plan .context/deployments/mainnet/plan.json --out-dir .context/deployments/mainnet/handoff-paused
