@@ -16,7 +16,7 @@ export function releaseEnvironment(base = process.env) {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const steps = ['release:check', 'sdk:test', 'sdk:pack:test', 'backend:test', 'contracts:test', 'contracts:build', 'lint', 'typecheck', 'test:coverage', 'storybook:build', 'build', 'test:e2e'];
+  const steps = ['release:check', 'railway:check', 'sdk:test', 'sdk:pack:test', 'backend:test', 'contracts:test', 'contracts:build', 'lint', 'typecheck', 'test:coverage', 'storybook:build', 'build', 'test:e2e'];
   console.log('Verifying local fixtures. Rebuild with reviewed deployment settings before release.');
   for (const step of steps) {
     const result = spawnSync('pnpm', ['run', step], {

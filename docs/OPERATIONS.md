@@ -1,5 +1,9 @@
 # Operating the owned marketplace
 
+Railway is the selected staging/production host. Follow [Railway setup](RAILWAY.md)
+for its two-service topology and per-environment volumes. The native/Compose
+instructions below remain useful for local rehearsal on a shared host.
+
 ## Deployment boundaries
 
 Use one chain database per chain and marketplace deployment. Keep application state in its adjacent `.app` file and assets in the configured directory. Run one indexing worker and one metadata worker per database. The API supports 1–8 Node workers with `MARKETPLACE_API_WORKERS`; keep embedded indexing off when using multiple API workers. SQLite WAL permits readers during a writer transaction; this topology is not high availability.
@@ -61,6 +65,25 @@ Do not copy fixture databases, test assets or devnet addresses into a deployment
 `.dockerignore` excludes local environments, data, keys, caches and test artifacts
 from container build contexts. Archive investigation output under `.context/archive`;
 keep active server logs and `.context/toolchain` available to their running tools.
+
+## Realms-only indexing baseline
+
+Initial launch scope is Realms ERC-721 only. For pre-deployment historical
+investigation, set `MARKETPLACE_CHAIN=SN_MAIN` and
+`MARKETPLACE_REGISTRY_PATH=config/marketplace/registry.realms.json` in a separate
+local backend environment. Select a new scratch `MARKETPLACE_DB`; do not reuse a
+populated multi-collection database, whose persisted collection rows remain.
+Clear marketplace address/class/start-block overrides for this NFT-only profile.
+The profile deliberately has no marketplace identity or approved currencies, so
+it cannot establish checkout readiness. Mainnet RPC verified contract absence at
+664161 and presence at 664162 on 8 October 2026. Recheck class identity at the
+acceptance checkpoint; this deployment-boundary probe does not establish complete
+history or ownership reconciliation.
+
+Production uses the deployment export with only Realms approved, reviewed payment
+currencies and the verified marketplace identity. Start a fresh production DB;
+the NFT-only scratch database cannot be promoted by changing its identity. The
+broader default registry is a development candidate list, not the launch allowlist.
 
 ## Indexer rollout order
 
@@ -182,3 +205,35 @@ and production inputs remain unverified. No infrastructure was deployed.
 ## Release gates
 
 Independent contract audit, mainnet-fork collection/currency compatibility, mainnet-fork resource checks (the local account 25-item benchmark passes), supported-wallet end-to-end trading, full historical backfill/reconciliation, representative load and recovery drills, named operator/hosting budget, Sepolia rehearsal and seven-day soak remain required. Do not infer production readiness from demo UI screenshots or unit tests.
+
+## Trusted proxy rate limiting
+
+Direct API connections are limited by their normalized TCP peer IP. Forwarded
+headers are ignored by default, including loopback callers. For the selected
+Railway topology, the checked-in IaC sets
+`MARKETPLACE_TRUSTED_PROXY_HOSTS=web.railway.internal`; the API resolves that exact
+service hostname and accepts only its relayed `X-Real-IP`. Railway's public edge
+sets this header and the Next.js rewrite carries it to the private backend.
+`X-Forwarded-For` is never used to establish identity. The backend must have no
+public domain/TCP proxy, and web public traffic must enter through Railway HTTP
+ingress. See the [Railway client-IP contract](https://station.railway.com/questions/need-authoritative-railway-client-ip-p-b7a7b4bd)
+and [header documentation](https://docs.railway.com/networking/public-networking/specs-and-limits).
+
+Other deployments can set comma-separated `MARKETPLACE_TRUSTED_PROXY_ADDRESSES`
+and/or `MARKETPLACE_TRUSTED_PROXY_HOSTS` only for a trusted gateway that **overwrites**
+`X-Real-IP` from the actual client connection. A bare Next rewrite does not sanitize
+client-supplied forwarding headers; do not trust it without that ingress boundary.
+DNS results are cached for 30 seconds, and lookup failure grants no new header
+trust. Malformed or multi-value IP headers fall back to the TCP peer. Each visitor
+retains the 300-request/minute quota; `/health/live` is exempt from visitor quotas.
+Staging still needs a live ingress anti-spoofing and multi-visitor check.
+
+## Historical source boundary changes
+
+Source progress now persists `startBlock` atomically with each block checkpoint.
+Moving a configured start earlier than recorded coverage rejects further scans
+with `SOURCE_BACKFILL_REQUIRED`; API readiness checks the same boundary immediately,
+even before another scanner run. Old progress without a recorded start is
+unverified and requires a fresh backfill database. Moving the configured boundary
+later never rewrites the original covered start. Preserve the adjacent application
+database when replacing chain history, following the onboarding procedure above.

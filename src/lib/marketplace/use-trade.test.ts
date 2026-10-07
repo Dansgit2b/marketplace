@@ -15,3 +15,61 @@ it('clears reverted pending state so an intentional retry is possible',async()=>
 it('requires a connected wallet and preserves wallet rejection as an error',async()=>{wallet.mockReturnValue({});const {result}=renderHook(useTrade);await act(async()=>{await result.current.execute(()=>calls);});expect(result.current.state.message).toContain('Connect');expect(execute).not.toHaveBeenCalled();});
 
 it('resumes a saved transaction after reload even when market config is unavailable',async()=>{market.mockReturnValue({data:undefined});localStorage.setItem(pendingStorageKey('0x2','LOCAL','0x9'),JSON.stringify({hash:'0xaa',account:'0x2',chain:'LOCAL',marketplace:'0x9',stage:'submitted'}));const {result}=renderHook(useTrade);await act(async()=>{await result.current.resume();});expect(result.current.state.stage).toBe('reflected');expect(execute).not.toHaveBeenCalled();});
+
+it('reconciles a reloaded unknown submission with a verified wallet hash without signing again', async () => {
+  const getTransaction = vi.fn().mockResolvedValue({ transaction_hash: '0xaa', sender_address: '0x2' });
+  wallet.mockReturnValue({ ...wallet(), account: { ...wallet().account, getTransaction } });
+  localStorage.setItem(pendingStorageKey('0x2','LOCAL','0x9'), JSON.stringify({ hash:'0x0', account:'0x2', chain:'LOCAL', marketplace:'0x9', stage:'submitted', unknown:true }));
+  const { result } = renderHook(useTrade);
+  await act(async () => { await result.current.resume(); });
+  expect(result.current.state.unknownSubmission).toBe(true);
+  await act(async () => { await result.current.reconcileUnknown({ transactionHash: '0xaa' }); });
+  expect(getTransaction).toHaveBeenCalledWith('0xaa');
+  expect(result.current.state.stage).toBe('reflected');
+  expect(execute).not.toHaveBeenCalled();
+});
+it('keeps an unknown submission locked for wrong-account hashes and unavailable RPC', async () => {
+  const getTransaction = vi.fn().mockResolvedValue({ transaction_hash:'0xaa', sender_address:'0x3' });
+  wallet.mockReturnValue({ ...wallet(), account: { ...wallet().account, getTransaction } });
+  execute.mockRejectedValue(new Error('Wallet disconnected'));
+  const { result } = renderHook(useTrade);
+  await act(async () => { await result.current.execute(() => calls); });
+  expect(result.current.state.unknownSubmission).toBe(true);
+  await act(async () => { await expect(result.current.reconcileUnknown({ transactionHash:'0xaa' })).rejects.toThrow(/wallet/i); });
+  getTransaction.mockRejectedValue(new Error('RPC unavailable'));
+  await act(async () => { await expect(result.current.reconcileUnknown({ transactionHash:'0xaa' })).rejects.toThrow(/RPC/); });
+  await act(async () => { await result.current.execute(() => calls); });
+  expect(execute).toHaveBeenCalledTimes(1);
+  expect(localStorage.getItem(pendingStorageKey('0x2','LOCAL','0x9'))).toContain('"unknown":true');
+});
+it('clears unknown intent only after explicit wallet-confirmed non-submission', async () => {
+  execute.mockRejectedValue(new Error('Wallet disconnected'));
+  const { result } = renderHook(useTrade);
+  await act(async () => { await result.current.execute(() => calls); });
+  await act(async () => { await result.current.reconcileUnknown({ confirmedNotSubmitted:true }); });
+  expect(localStorage.getItem(pendingStorageKey('0x2','LOCAL','0x9'))).toBeNull();
+  expect(result.current.state.stage).toBe('idle');
+  expect(execute).toHaveBeenCalledTimes(1);
+});
+it('refuses recovery on the wrong network without clearing the saved attempt', async () => {
+  execute.mockRejectedValue(new Error('Wallet disconnected'));
+  const { result } = renderHook(useTrade);
+  await act(async () => { await result.current.execute(() => calls); });
+  chain.mockResolvedValue('0x2');
+  await act(async () => { await expect(result.current.reconcileUnknown({ confirmedNotSubmitted:true })).rejects.toThrow(/network/); });
+  expect(localStorage.getItem(pendingStorageKey('0x2','LOCAL','0x9'))).toContain('"unknown":true');
+});
+it('refuses recovery if the account changes during hash verification', async () => {
+  let complete!: (value: { transaction_hash:string; sender_address:string }) => void;
+  const getTransaction = vi.fn(() => new Promise(resolve => { complete = resolve; }));
+  wallet.mockReturnValue({ ...wallet(), account: { ...wallet().account, getTransaction } });
+  execute.mockRejectedValue(new Error('Wallet disconnected'));
+  const { result, rerender } = renderHook(useTrade);
+  await act(async () => { await result.current.execute(() => calls); });
+  let recovery!: Promise<void>;
+  await act(async () => { recovery = result.current.reconcileUnknown({ transactionHash:'0xaa' }); await Promise.resolve(); });
+  wallet.mockReturnValue({ ...wallet(), address:'0x3' });
+  rerender();
+  await act(async () => { complete({ transaction_hash:'0xaa', sender_address:'0x2' }); await expect(recovery).rejects.toThrow(/changed/); });
+  expect(localStorage.getItem(pendingStorageKey('0x2','LOCAL','0x9'))).toContain('"unknown":true');
+});

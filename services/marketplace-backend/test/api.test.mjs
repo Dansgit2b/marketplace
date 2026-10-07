@@ -161,3 +161,16 @@ test("transaction reflection includes canonical governance events and is invalid
   assert.equal((await get("0xb")).reflected, false);
   assert.equal((await get("0xa")).reflected, true);
 });
+
+test('trusted proxy visitors have independent quotas and cannot throttle health probes', async (t) => {
+  const store = new Store(':memory:');
+  const api = createApi({ store, config: { chain: 'LOCAL', chainId: '0x1', collections: [], currencies: [], trustedProxyAddresses: ['127.0.0.1'] } });
+  await new Promise(resolve => api.listen(0, '127.0.0.1', resolve));
+  t.after(() => { api.closeAllConnections(); api.close(); store.close(); });
+  const base = `http://127.0.0.1:${api.address().port}`;
+  const visitor = ip => fetch(base + '/v1/chains/LOCAL/collections', { headers: { 'x-real-ip': ip } });
+  for (let i = 0; i < 300; i++) assert.equal((await visitor('203.0.113.1')).status, 200);
+  assert.equal((await visitor('203.0.113.1')).status, 429);
+  assert.equal((await visitor('203.0.113.2')).status, 200);
+  assert.equal((await fetch(base + '/health/live', { headers: { 'x-real-ip': '203.0.113.1' } })).status, 200);
+});

@@ -43,6 +43,9 @@ jobs:
       - name: Release tree hygiene
         run: pnpm release:check
 
+      - name: Railway environment configuration
+        run: pnpm railway:check
+
       - name: Production dependency audit
         run: pnpm release:audit
 

@@ -24,9 +24,9 @@ Keep the current marketplace UI. Give it a backend we operate that can reconstru
 | Build our own indexer; do not use Torii | Confirmed by user; supersedes the previous recommendation |
 | Node.js backend | Accepted by user |
 | No third-party runtime packages in the new backend | Conservative interpretation of “no deps”; standard Node modules only |
-| Launch with registered Realms ecosystem collections | Proposed default; permissionless onboarding deferred |
+| Launch with the Realms ERC-721 collection only | Confirmed 8 October 2026; other collections and permissionless onboarding deferred |
 | Native Node HTTP API, independently deployable beside the Next.js frontend | Proposed default; no Fastify, Arcade SDK, Dojo SDK or indexing framework |
-| Portable containers and persistent storage; hosting vendor undecided | Proposed default; do not inherit AWS complexity automatically |
+| Railway staging and production; persistent SQLite volume per environment | Confirmed 8 October 2026; API/indexer/metadata processes share one backend service |
 
 The October [current-state assessment](./INDEXER-CURRENT-STATE-2026-10-06.md) remains the historical inventory. Its Torii recommendation is superseded by the user's custom-indexer decision. PR #92 is a source of requirements and selected fixtures/interface ideas; its indexing implementation is excluded. This scope does not silently convert the prior branch's “accepted” ADR into user approval.
 
@@ -57,7 +57,13 @@ Starknet RPC and token metadata origins are still external data sources. “No d
 
 Off-chain signed orders; trait offers; ERC-1155/partial fills; auctions; custodial accounts; server signing; relayers; fiat conversion; cross-chain trading; richer social profiles/watchlists; email/push notifications; permissionless collection onboarding; a new visual design; removal of Controller/Ready/Braavos; operating a Starknet full node. In-product authentication/inbox and per-currency marketplace analytics are launch work.
 
-Initial collection candidates from the draft registry are Realms, Season Pass, Loot Chests, Cosmetics, Golden Token, Beasts and Adventurers. Validate their exact addresses, standards, deployment blocks, mutable metadata behavior and sale eligibility before inclusion. v1 trading is explicitly ERC-721 with quantity one. A launch collection requiring ERC-1155 would require a scope change, not silent generic support.
+The initial collection is Realms only, confirmed 8 October 2026. Use
+`config/marketplace/registry.realms.json` as the indexing baseline and validate
+its configured address/start block, contract class, event layouts, metadata and
+transfer/royalty behavior against chain evidence. The broader `registry.json`
+remains a development candidate inventory, not the initial deployment allowlist.
+Season Pass, Loot Chests, Cosmetics, Golden Token, Beasts and Adventurers are
+follow-up onboarding work. v1 trading remains ERC-721 with quantity one.
 
 Portfolio scope is holdings of registered collections, not every NFT on Starknet. Historical/legacy collections may be retained in internal evidence but excluded from discovery using explicit registry policy; never infer replacement collections from similar names.
 

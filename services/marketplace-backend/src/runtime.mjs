@@ -5,7 +5,7 @@ import { RpcClient } from "./rpc.mjs";
 import { address } from "./domain.mjs";
 export function runtime(env = process.env) {
   const registry = JSON.parse(
-    readFileSync(
+    env.MARKETPLACE_REGISTRY_JSON || readFileSync(
       env.MARKETPLACE_REGISTRY_PATH ??
         new URL("../../../config/marketplace/registry.json", import.meta.url),
       "utf8",
@@ -19,6 +19,8 @@ export function runtime(env = process.env) {
     chain,
     origin: env.MARKETPLACE_ORIGIN ?? "http://localhost:3000",
     operatorToken: env.MARKETPLACE_OPERATOR_TOKEN,
+    trustedProxyHosts: env.MARKETPLACE_TRUSTED_PROXY_HOSTS?.split(",").map(s => s.trim()).filter(Boolean),
+    trustedProxyAddresses: env.MARKETPLACE_TRUSTED_PROXY_ADDRESSES?.split(",").map(s => s.trim()).filter(Boolean),
     ipfsGateway: env.MARKETPLACE_IPFS_GATEWAY ?? "https://ipfs.io/ipfs",
     assetDir: resolve(
       env.MARKETPLACE_ASSET_DIR ?? "services/marketplace-backend/data/assets",

@@ -124,3 +124,9 @@ Browser tests use the built frontend and a local fixture backend. [The build pla
 - [Operations and recovery](docs/OPERATIONS.md), [API contract](services/marketplace-backend/openapi.json).
 - [Agent instructions](AGENTS.md).
 - Historical [indexer assessment](docs/INDEXER-CURRENT-STATE-2026-10-06.md), [Arcade assessment](docs/CONTRACT-ASSESSMENT-2026-10-06.md) and [OpenSea comparison](docs/OPENSEA-COVERAGE.md).
+
+## Railway deployment
+
+Staging and production run on Railway. See [Railway setup](docs/RAILWAY.md) for
+service configuration, isolated volumes, environment variables and deployment
+steps. Run `pnpm railway:check` to validate both environment definitions locally.

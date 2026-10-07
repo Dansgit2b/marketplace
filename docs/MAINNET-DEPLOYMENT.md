@@ -56,6 +56,11 @@ hashes, immutable fee recipient/rate (0–500 bps), a fixed salt, UDC class hash
 explicit maximum fee in **FRI** per transaction, and reviewed asset lists.
 There is deliberately no default fee, admin address, fee cap or asset approval.
 
+The initial NFT approval is **Realms only**, confirmed 8 October 2026. Use the
+address/start block from `registry.realms.json` as investigation inputs; verify them
+and supply its class hash and compatibility evidence before filling the single
+collection row. Payment currencies remain a separate release choice.
+
 Collection rows:
 
 ```json

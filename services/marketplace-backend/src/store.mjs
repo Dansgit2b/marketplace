@@ -152,6 +152,7 @@ export class Store {
           source,
           {
             source,
+            startBlock: this.get("progress", source)?.startBlock ?? block.sourceStarts?.[source] ?? null,
             block: block.number,
             hash: block.hash,
             observedAt: block.observedAt ?? Date.now(),

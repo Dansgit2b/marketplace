@@ -49,11 +49,18 @@ export function useTrade() {
   const state = useScenario();
   return {
     execute,
+    resume: async () => false,
+    reconcileUnknown,
     state: state.tradeState,
     busy: ["signature", "submitted", "indexing"].includes(
       state.tradeState.stage,
     ),
     address: state.connected ? ADDRESS : undefined,
     config: { ...fixtureConfig, demo: state.demo },
+    configError: false,
   };
 }
+
+export const reconcileUnknown = fn(async (_result: { transactionHash: string } | { confirmedNotSubmitted: true }) => {
+  useScenario.setState({ tradeState: { stage: "idle", message: "" } });
+});

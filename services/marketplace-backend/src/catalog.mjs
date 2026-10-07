@@ -533,6 +533,14 @@ export class Catalog {
     const progress = required.map((source) =>
       this.store.get("progress", source),
     );
+    const starts = new Map([
+      ...(this.config.collections ?? []).map(c => [address(c.address), c.startBlock]),
+      ...(this.config.marketplace ? [[address(this.config.marketplace), this.config.marketplaceStartBlock]] : []),
+    ]);
+    const incompleteHistory = required.some((source, i) => {
+      const start = starts.get(source), p = progress[i];
+      return !Number.isSafeInteger(start) || !Number.isSafeInteger(p?.startBlock) || p.startBlock > start;
+    });
     const missing = progress.some((p) => !p);
     const indexed = missing ? null : Math.min(...progress.map((p) => p.block));
     const lag =
@@ -542,6 +550,7 @@ export class Catalog {
     if (!this.config.marketplace || !cfg)
       reasons.push("MARKETPLACE_NOT_DEPLOYED");
     if (missing) reasons.push("SOURCES_SYNCING");
+    if (incompleteHistory) reasons.push("SOURCE_BACKFILL_REQUIRED");
     if (!rpc || Date.now() - rpc.observedAt > 15000) reasons.push("HEAD_STALE");
     if (lag == null || lag > 2) reasons.push("INDEX_STALE");
     if (!rpc?.identityVerified) reasons.push("IDENTITY_UNVERIFIED");

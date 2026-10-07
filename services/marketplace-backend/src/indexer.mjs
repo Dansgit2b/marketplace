@@ -99,6 +99,8 @@ async function scanRange(store, rpc, config, { window = 100, stopAt } = {}) {
       head &&
       source.start <= head.number &&
       (!progress ||
+        !Number.isSafeInteger(progress.startBlock) ||
+        progress.startBlock > source.start ||
         progress.block !== head.number ||
         !equal(progress.hash, head.hash))
     )
@@ -184,14 +186,17 @@ async function scanRange(store, rpc, config, { window = 100, stopAt } = {}) {
     Array.from({ length: end - from + 1 }, (_, i) => from + i),
     8,
     async (n) => {
-      const full = !!found.get(n)?.length || n % 32 === 0;
+      // A filtered page can silently omit every event in a block. Sampling empty
+      // blocks cannot prove coverage; compare every block with its full receipts.
       const block = await rpc.call(
-        full
-          ? "starknet_getBlockWithReceipts"
-          : "starknet_getBlockWithTxHashes",
+        "starknet_getBlockWithReceipts",
         { block_id: { block_number: n } },
       );
-      return { n, full, block };
+      if (block.block_number !== n ||
+          !["ACCEPTED_ON_L1", "ACCEPTED_ON_L2"].includes(block.status) ||
+          !Array.isArray(block.transactions))
+        throw new ApiError("INVALID_RPC_BLOCK", "Expected an accepted receipt block at the requested height.");
+      return { n, block };
     },
   );
   if (!equal(blocks.at(-1).block.block_hash, anchor.block_hash))
@@ -199,46 +204,45 @@ async function scanRange(store, rpc, config, { window = 100, stopAt } = {}) {
       "CHAIN_CONFLICT",
       "Range changed while reading receipts.",
     );
-  for (const { n, full, block: b } of blocks) {
+  for (const { n, block: b } of blocks) {
     const expected = found.get(n) ?? [];
     const active = new Set(
       sources.filter((s) => s.start <= n).map((s) => s.address),
     );
     const events = [],
       actual = [];
-    if (full)
-      for (const entry of b.transactions) {
-        const receipt = entry.receipt;
-        if (!receipt || !Array.isArray(receipt.events))
-          throw new ApiError(
-            "INVALID_RECEIPT",
-            "Missing ordered receipt events.",
-          );
-        const rawTransactionHash = receipt.transaction_hash ?? entry.transaction?.transaction_hash;
-        const transactionHash = rawTransactionHash ? "0x"+BigInt(rawTransactionHash).toString(16) : null;
-        if (!transactionHash)
-          throw new ApiError(
-            "INVALID_RECEIPT",
-            "Receipt transaction identity missing.",
-          );
-        if (
-          receipt.transaction_hash &&
-          entry.transaction?.transaction_hash &&
-          !equal(receipt.transaction_hash, entry.transaction.transaction_hash)
-        )
-          throw new ApiError(
-            "INVALID_RECEIPT",
-            "Conflicting transaction identity.",
-          );
-        if (receipt.execution_status === "REVERTED") continue;
-        for (const [eventIndex, raw] of receipt.events.entries()) {
-          if (!active.has(address(raw.from_address))) continue;
-          actual.push({ raw, tx: transactionHash });
-          const event = decodeEvent(raw, config);
-          if (event)
-            events.push({ ...event, raw, transactionHash, eventIndex });
-        }
+    for (const entry of b.transactions) {
+      const receipt = entry.receipt;
+      if (!receipt || !Array.isArray(receipt.events))
+        throw new ApiError(
+          "INVALID_RECEIPT",
+          "Missing ordered receipt events.",
+        );
+      const rawTransactionHash = receipt.transaction_hash ?? entry.transaction?.transaction_hash;
+      const transactionHash = rawTransactionHash ? "0x"+BigInt(rawTransactionHash).toString(16) : null;
+      if (!transactionHash)
+        throw new ApiError(
+          "INVALID_RECEIPT",
+          "Receipt transaction identity missing.",
+        );
+      if (
+        receipt.transaction_hash &&
+        entry.transaction?.transaction_hash &&
+        !equal(receipt.transaction_hash, entry.transaction.transaction_hash)
+      )
+        throw new ApiError(
+          "INVALID_RECEIPT",
+          "Conflicting transaction identity.",
+        );
+      if (receipt.execution_status === "REVERTED") continue;
+      for (const [eventIndex, raw] of receipt.events.entries()) {
+        if (!active.has(address(raw.from_address))) continue;
+        actual.push({ raw, tx: transactionHash });
+        const event = decodeEvent(raw, config);
+        if (event)
+          events.push({ ...event, raw, transactionHash, eventIndex });
       }
+    }
     const a = actual.map((x) => `${BigInt(x.tx)}:${signature(x.raw)}`).sort(),
       e = expected
         .map((x) => `${BigInt(x.transaction_hash)}:${signature(x)}`)
@@ -258,6 +262,7 @@ async function scanRange(store, rpc, config, { window = 100, stopAt } = {}) {
       timestamp: b.timestamp,
       events,
       sources: [...active],
+      sourceStarts: Object.fromEntries(sources.map(s => [s.address, s.start])),
       observedAt,
     });
   }

@@ -3,14 +3,14 @@ import { useTrade } from "@/lib/marketplace/use-trade";
 import { TradeStatus } from "./trade-status";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { useMarketConfig } from "@/lib/marketplace/react";
 import { Badge } from "@/components/ui/badge";
+import { UnknownSubmission } from "./unknown-submission";
 export function MarketToolbar() {
-  const config = useMarketConfig();
   const trade = useTrade();
+  const config = { data: trade.config, isError: trade.configError };
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-2 text-xs">
-      <nav className="flex gap-4" aria-label="Marketplace tools">
+      <nav className="flex flex-wrap gap-4" aria-label="Marketplace tools">
         <Link href="/trader" className="hover:text-primary">
           Trading dashboard
         </Link>
@@ -43,6 +43,13 @@ export function MarketToolbar() {
         </Button>
       )}
       <TradeStatus state={trade.state} />
+      {trade.address && trade.state.unknownSubmission && (
+        <UnknownSubmission
+          key={`${trade.address}:${trade.config?.marketplace}`}
+          busy={trade.busy}
+          onReconcile={trade.reconcileUnknown}
+        />
+      )}
     </div>
   );
 }

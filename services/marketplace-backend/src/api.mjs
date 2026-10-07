@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createServer } from "node:http";
 import { randomUUID, timingSafeEqual } from "node:crypto";
+import { createClientIdentity } from "./client-identity.mjs";
 import { bestBid } from "./bids.mjs";
 import { Catalog } from "./catalog.mjs";
 import { Auth } from "./auth.mjs";
@@ -75,6 +76,7 @@ export function createApi({ store, config, rpc, verifySignature }) {
       }),
   });
   const limits = new Map();
+  const clientIdentity = createClientIdentity(config);
   const api = createServer(async (req, res) => {
     const requestId = randomUUID();
     let readTransaction = false;
@@ -106,8 +108,14 @@ export function createApi({ store, config, rpc, verifySignature }) {
         res.end();
         return;
       }
+      const url = new URL(req.url, "http://localhost");
+      // Deployment probes must not compete with a visitor's quota.
+      if (url.pathname === "/health/live") {
+        send({ live: true });
+        return;
+      }
       const now = Date.now(),
-        ip = req.socket.remoteAddress ?? "unknown",
+        ip = await clientIdentity(req),
         entry = limits.get(ip);
       const bucket =
         entry && entry.expires > now
@@ -122,15 +130,10 @@ export function createApi({ store, config, rpc, verifySignature }) {
           "Too many requests. Retry shortly.",
           429,
         );
-      const url = new URL(req.url, "http://localhost");
       const parts = url.pathname
         .split("/")
         .filter(Boolean)
         .map(decodeURIComponent);
-      if (url.pathname === "/health/live") {
-        send({ live: true });
-        return;
-      }
       if (url.pathname === "/health/ready") {
         const status = catalog.status();
         send(status, status.safeForCheckout ? 200 : 503);

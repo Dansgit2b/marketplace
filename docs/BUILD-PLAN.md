@@ -1,6 +1,6 @@
 # Starknet marketplace — full scope and build plan
 
-Version 1.2 · 7 October 2026
+Version 1.3 · 8 October 2026
 
 **Start here.** This is the consolidated project plan. It joins the contract, indexer, API, existing frontend, OpenSea product benchmark, operations and migration into one delivery sequence. It supersedes earlier launch-boundary statements where they differ; supporting documents provide implementation detail and historical evidence.
 
@@ -8,7 +8,7 @@ Status: implementation in progress. **Deployment remains blocked by the launch g
 
 ## 1. Product outcome
 
-Build an OpenSea-quality NFT marketplace for the initial Starknet/Realms collection set: discover assets, understand the market, list and reprice inventory, buy/sweep, make and accept bids, manage orders, and follow trading activity.
+Build an OpenSea-quality NFT marketplace for the Realms ERC-721 collection at launch: discover assets, understand the market, list and reprice inventory, buy/sweep, make and accept bids, manage orders, and follow trading activity.
 
 Keep the current UI's visual design and reusable components. Extend it for the missing workflows. Build standalone Cairo settlement and an owned Node.js indexing/API backend. The new marketplace must operate without Torii, Dojo World storage, Cartridge-hosted market data or Arcade SDK trading logic.
 
@@ -26,14 +26,56 @@ OpenSea is the NFT product benchmark, not a claim of exhaustive feature parity. 
 | Backend dependencies | Zero third-party runtime packages as the conservative interpretation of “no deps”; Node built-ins |
 | OpenSea launch expansion | Include collection offers, bulk seller workflows, trader dashboard, search/analytics, trust tools and in-product notifications in this consolidated target plan |
 | Collection offers | One-shot offers for any NFT in a specified collection; no partial fills. Implemented in the version-1 ABI |
-| Data scope | Curated launch collection registry; operator-led onboarding |
+| Data scope | Realms ERC-721 only at launch, confirmed 8 October 2026; other collections deferred to operator-led onboarding |
 | Backend storage | Implemented SQLite/local persistent storage with one writer per chain and off-host backups |
 | Pricing | Confirmed fixed buyer debit, fees/royalties deducted from that total; no executor surcharge |
 | Royalties | Confirmed snapshots for token-specific orders; bounded fill-time royalties for collection offers |
 | Administration | Confirmed non-upgradeable contract, limited multisig administration, cancellation available while paused |
-| Hosting | Portable deployment; provider, operator, capacity and budget still to select |
+| Hosting | Railway staging (Sepolia) and production (mainnet), confirmed 8 October 2026; workspace, domains, operator and capacity still to select |
 
 User confirmed inclusive buyer pricing, token-order royalty snapshots, capped fill-time collection royalties and a non-upgradeable contract with limited administration on 6 October 2026. The implementation caps protocol fees at 500 basis points; the production rate, receiver, administrator addresses and approved asset registry remain explicit deployment inputs. These are material decisions, not numbers to invent during deployment. The broader product target does not change the user's selection of on-chain orders or ERC-721-only launch.
+
+### Railway hosting — confirmed 8 October 2026
+
+Host both frontend and backend on Railway, with isolated `staging` and
+`production` environments. `.railway/railway.ts` defines a web service plus a
+single backend service supervising API/indexer/metadata processes on one attached
+SQLite volume per environment. Railway cannot share that volume across services;
+keep one backend replica. Staging defaults to Sepolia and production to mainnet.
+See [Railway setup](RAILWAY.md) for configuration and operating steps. Repository
+configuration does not provision cloud resources or close launch gates.
+
+### Realms-only launch baseline — confirmed 8 October 2026
+
+The launch NFT collection is **Realms**. Use its actual contract behavior, historical
+transfer/approval events, token URI encoding and traits as the baseline for scanner
+fixtures, asset compatibility, full backfill and fixed-block reconciliation.
+
+The existing registry identifies Realms on `SN_MAIN` as
+`0x07ae27a31bb6526e3de9cf02f081f6ce0615ac12a6d7b85ee58b8ad7947a2809`,
+with start block **664162**. A read-only mainnet check on 8 October 2026 found
+this address at block 664162 and received `Contract not found` at 664161. The
+name at deployment is `Realms (for Adventurers)` and symbol `LootRealm`. The
+class hash is `0x42731c2355af9d59eda314ea3cca49ea3cc85173b2ca3c35c6c9df1c087cc43`.
+This is single-provider identity/boundary evidence, not full historical acceptance.
+Recheck identity at the selected reconciliation checkpoint. `config/marketplace/registry.realms.json` is the
+single-collection indexing baseline; its marketplace identity is unset and its
+currency list is empty pending reviewed deployment inputs. Use a separate scratch
+DB for NFT-only investigation and a fresh deployment-bound DB for launch.
+
+Season Pass, Loot Chests, Cosmetics, Golden Token, Beasts and Adventurers are
+outside the initial release. Their specialized metadata and game eligibility are
+not launch requirements. Check Realms' own transfer restrictions and royalty
+behavior explicitly. The settlement contract and SDK retain generic ERC-721
+support; initial production collection approval must contain only Realms.
+
+Acceptance work proceeds in this order: scanner failure/crash-recovery tests (expanded locally on 8 October);
+Realms event/metadata compatibility fixtures; full Realms history to a fixed
+checkpoint; external ownership/approval/order/accounting reconciliation;
+metadata/media coverage; representative load/restore and staging soak. Realms NFT
+history can be investigated before the marketplace deploys; marketplace order
+history begins at the new settlement deployment. A Realms-only launch still
+requires the trading, security and operational gates below.
 
 ## 3. Launch scope
 
@@ -315,19 +357,59 @@ are in [operations](OPERATIONS.md). Stages advance on evidence, not calendar dat
 
 ### Current go/no-go position
 
-At PR #93 head `984433e`, application CI and the Vercel preview passed. Contract CI
-failed **before running tests**: the runner installed snforge 0.64.1 while the
-wrapper required 0.57.0. The follow-up aligns Foundry and `snforge_std` on 0.64.1,
-updates the setup action to 6.0.0 so it forwards its input, and pins Universal
-Sierra Compiler 2.10.2. All 30 contract tests pass locally; rerun remote CI on the
-updated release commit. See the historical
-[failed contract job](https://github.com/BibliothecaDAO/marketplace/actions/runs/37573161727/job/112636108127).
+At the previously reviewed PR #93 commit `e2b8cf1`, remote contract and application CI and the Vercel preview
+passed. Foundry and `snforge_std` use 0.64.1, Universal Sierra Compiler uses 2.10.2,
+and Scarb remains 2.15.1 with unchanged production contract hashes. This closes the
+previous CI toolchain mismatch; rerun checks on the final release commit.
 
 The updated production audit has zero critical/high findings and five moderate
 findings, with the remediation documented in operations. Independent contract
 audit, approved asset/fork/resource checks, real supported
 wallets, hosting/operator choices and live indexer acceptance remain open. Recheck
 CI, audit and artifact hashes on the exact release commit before approval.
+
+### Realms and Railway verification — 8 October 2026
+
+- Railway repository configuration exists for staging and production. Both Docker
+  images build locally. Container checks passed for health, private-network API
+  proxying, frontend rendering, three supervised backend processes, worker-death
+  shutdown and persistence across restart. No Railway resources were created.
+- The backend now has 54 passing tests. Added scanner cases cover omitted/duplicate
+  events, repeated cursors, pagination outage, changed anchors, wrong/unaccepted
+  blocks, bad receipt identity, automatic reorg and on-disk resume. A real SIGKILL
+  inside a SQLite transaction confirms rollback to the preceding checkpoint.
+- Regression tests exposed missing-event coverage on unsampled empty blocks and
+  unchecked receipt height/status. The scanner now fetches full receipts for every
+  scanned block and validates them. This increases payload cost; measure realistic
+  archive-RPC throughput and disk growth before planning the full backfill.
+- Three real historical Realms mint events are checked in as decoder fixtures.
+  A live native scan of blocks 664162–664163 passed. That two-block probe contained
+  no NFTs and is not a full collection backfill, ownership reconciliation or load
+  benchmark. Full history, external reconciliation, metadata/media coverage,
+  supported-wallet staging and production-size restore remain open.
+
+### PR #93 review follow-up — 8 October 2026
+
+The three requested changes have regression coverage:
+
+- Per-visitor quotas accept `X-Real-IP` only from configured immediate proxy peers.
+  Railway configuration trusts the environment-local frontend DNS identity and
+  requires its public ingress to overwrite client-IP headers. Direct callers and
+  arbitrary forwarded chains do not gain trust; liveness probes bypass quotas.
+- Every source checkpoint records its historical start. Earlier boundary changes,
+  including marketplace history, immediately block readiness and scanning until a
+  fresh backfill. Old databases without that evidence also fail closed.
+- The marketplace toolbar exposes unknown-submission recovery. Users confirm a
+  wallet hash, which is checked against the active network and sender, or explicitly
+  confirm non-submission after checking the wallet. Lookup failures and wallet/
+  network changes retain the lock. Neither action signs or resubmits a trade.
+
+Local release checks passed: 599 unit/Storybook tests, 40 SDK tests plus packed
+consumers, 30 Cairo tests, production/Storybook builds and four browser smoke flows.
+The final backend suite has 60 tests. Recovery stories were checked at 320, 768
+and 1440px, with keyboard operation, error retention and wrapped controls. Recheck
+remote CI on the pushed commit; these checks do not replace live-wallet or Railway
+staging acceptance. See operations for required old-database replacement.
 
 ### Release stages
 
@@ -490,15 +572,17 @@ has an explicit outage/restore tradeoff and does not establish 99.9% availabilit
 
 ### Immediate work queue
 
-1. Release/contract lead: correct CI's snforge pin and obtain green contract CI on
-   the release SHA; track remaining moderate wallet advisories and commission independent
-   review. These are blockers, not launch-day tasks.
-2. Product/release owner: choose the first on-chain asset set, eligibility policy,
-   fee/admin/deployer inputs, legacy-order handling and named operational owners.
+1. Release/contract lead: retain green CI on the release SHA, track remaining
+   moderate wallet advisories and commission independent contract review. Review
+   and required remediation must complete before launch.
+2. Product/release owner: verify the confirmed Realms-only collection scope, select
+   payment currencies, and finalize fee/admin/deployer inputs, legacy-order handling
+   and named operational owners.
 3. Platform/indexer lead: choose host/domain/archive RPC, persistency and backup
    destinations; measure historical throughput and validate the pinned-endpoint
    outage/switch behavior. Current Compose topology is a starting deployment recipe.
-4. Indexer lead: implement the fixed-checkpoint external reconciliation report,
+4. Indexer lead: expand scanner failure/crash-recovery tests against the Realms
+   baseline; verify its historical source and implement the fixed-checkpoint external reconciliation report,
    metadata/media coverage report, monitoring/alerts and replacement-DB promotion
    procedure; rehearse them at representative size.
 5. Frontend/contract/indexer leads: run public Sepolia wallets/multisig and recovery

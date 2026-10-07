@@ -40,7 +40,7 @@ test("scanner consumes all event pages, pins range and commits empty-source cove
         status: "ACCEPTED_ON_L2",
         transactions: [],
       };
-      if (method === "starknet_getBlockWithReceipts")
+      if (method === "starknet_getBlockWithReceipts" && n === 1)
         block.transactions = [
           {
             transaction: { type: "INVOKE" },
@@ -136,4 +136,32 @@ test("a database cannot be reused for another chain or marketplace deployment", 
     { code: "DATABASE_IDENTITY_MISMATCH" },
   );
   store.close();
+});
+
+test('moving an existing source start earlier requires a rebuild and disables checkout immediately', async () => {
+  const { Catalog } = await import('../src/catalog.mjs');
+  const store = new Store(':memory:');
+  const cfg = { chain: 'LOCAL', chainId: '0x1', marketplace: '0x99', marketplaceStartBlock: 10, collections: [{ address: '0x9', startBlock: 10 }] };
+  const rpc = { call: async method => method === 'starknet_chainId' ? '0x1' : method === 'starknet_getEvents' ? { events: [] } : {
+    block_number: 10, block_hash: '0x10', parent_hash: '0x9', timestamp: 1, status: 'ACCEPTED_ON_L2', transactions: [],
+  } };
+  try {
+    await scanOnce(store, rpc, cfg);
+    store.put('config', 'marketplace', { paused: false });
+    store.put('status', 'rpc', { head: 10, observedAt: Date.now(), identityVerified: true });
+    assert.equal(new Catalog(store, cfg).status().safeForCheckout, true);
+    const changed = { ...cfg, collections: [{ address: '0x9', startBlock: 1 }] };
+    assert.equal(new Catalog(store, changed).status().safeForCheckout, false);
+    await assert.rejects(scanOnce(store, rpc, changed), { code: 'SOURCE_BACKFILL_REQUIRED' });
+    assert.equal(store.get('progress', address('9')).startBlock, 10);
+    const marketChanged = { ...cfg, marketplaceStartBlock: 1 };
+    assert.equal(new Catalog(store, marketChanged).status().safeForCheckout, false);
+    await assert.rejects(scanOnce(store, rpc, marketChanged), { code: 'SOURCE_BACKFILL_REQUIRED' });
+    const later = { ...cfg, collections: [{ address: '9', startBlock: 11 }] };
+    await scanOnce(store, rpc, later);
+    assert.equal(store.get('progress', address('9')).startBlock, 10);
+    store.db.prepare("UPDATE entities SET body=json_remove(body,'$.startBlock') WHERE kind='progress'").run();
+    assert.equal(new Catalog(store, cfg).status().safeForCheckout, false);
+    await assert.rejects(scanOnce(store, rpc, cfg), { code: 'SOURCE_BACKFILL_REQUIRED' });
+  } finally { store.close(); }
 });

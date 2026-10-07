@@ -126,3 +126,11 @@ When a reader is configured, cancellation preparation/submission also reads on-c
 Use either `royaltyPercent` (the existing convenience/UI policy, at most 50%) or `maxRoyalty` (exact base-unit `u256` cap). Absolute caps expose the full contract range. Collection offers still require strictly positive proceeds at the cap; token orders enforce positive proceeds against their actual royalty snapshot. Use either relative `durationSeconds` or absolute `expiry`; strings/bigints preserve the full `u64` range. Unsafe JavaScript numbers are rejected.
 
 `prepareBuy` keeps the bounded-deadline `buy_many` path, even for a one-item cart. `prepareBuyListing` deliberately exposes native `buy_listing`, whose ABI has no caller-supplied deadline; the local review expires before submission and the contract still enforces order expiry and maximum payment. Choose the cart path when an on-chain caller deadline is required.
+
+Ambiguous wallet responses set `TradeState.unknownSubmission`. Retained intent
+blocks another submission until a deliberate `reconcileUnknown` call supplies a
+verified transaction hash or `{ confirmedNotSubmitted: true }` after inspecting
+wallet activity. This low-level method trusts the caller's evidence; it does not
+perform network verification. The reference app verifies hash/network/sender and
+requires confirmation of the intended action, then calls `resume`. Do not clear
+pending storage on generic transport errors or automatically retry the signature.

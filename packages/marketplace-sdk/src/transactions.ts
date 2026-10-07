@@ -19,6 +19,7 @@ export type TradeState = {
     | "error";
   message: string;
   hash?: string;
+  unknownSubmission?: boolean;
 };
 export type AccountAdapter = {
   address: string;
@@ -194,6 +195,7 @@ export class TransactionCoordinator {
             ? "Submission outcome is unknown. Reconcile with your wallet before another submission."
             : "A saved transaction needs a status check before another submission.",
           hash: saved.unknown ? undefined : saved.hash,
+          unknownSubmission: !!saved.unknown,
         });
         return false;
       }
@@ -261,6 +263,7 @@ export class TransactionCoordinator {
       this.set({
         stage: "error",
         message: error instanceof Error ? error.message : "Transaction failed.",
+        unknownSubmission: !!(c?.account && c.config?.marketplace && this.memory.getItem(this.key(c)) && JSON.parse(this.memory.getItem(this.key(c))!).unknown),
       });
       return false;
     }
@@ -401,10 +404,10 @@ export class TransactionCoordinator {
         this.set({ stage: "idle", message: "" });
         return false;
       }
-      if (record.unknown)
-        throw new Error(
-          "Submission outcome is unknown. Use reconcileUnknown after inspecting wallet activity.",
-        );
+      if (record.unknown) {
+        this.set({ stage: "error", unknownSubmission: true, message: "Submission outcome is unknown. Check your wallet activity to recover this attempt." });
+        return false;
+      }
       return this.monitor(c, record);
     } catch (e) {
       this.set({
@@ -419,6 +422,7 @@ export class TransactionCoordinator {
     result: { transactionHash: string } | { confirmedNotSubmitted: true },
   ) {
     if (this.snapshot.busy) throw new Error("Transaction is busy.");
+    if (!c.account || !c.config?.marketplace) throw new Error("Connect your wallet first.");
     const pending = this.load(c);
     if (!pending?.unknown)
       throw new Error("No ambiguous submission to reconcile.");
@@ -430,7 +434,8 @@ export class TransactionCoordinator {
         hash: result.transactionHash,
         unknown: false,
       });
-    } else this.clear(c);
+    } else if (result.confirmedNotSubmitted === true) this.clear(c);
+    else throw new Error("Wallet confirmation is required.");
     this.set({ stage: "idle", message: "" });
   }
 }

@@ -122,3 +122,16 @@ Reference: [OpenSea's collection page](https://opensea.io/collection/azuki),
 inspected 7 October 2026. OpenSea currently separates compact global navigation
 and search from collection-specific filters. Our implementation removes the
 collection rail completely while retaining the existing Realms branding.
+
+## Unknown submission recovery
+
+`Trading/Unknown submission recovery` covers verified-hash confirmation,
+wallet-confirmed non-submission, lookup failure, busy and mobile states.
+`Trading/Saved transaction toolbar` verifies that the real toolbar exposes the
+same component and hides it after successful reconciliation without signing.
+The form was checked at 320, 768 and 1440px, including keyboard checkbox operation,
+wrapped buttons and retained input after errors. Hash recovery checks the current
+chain, transaction hash and wallet sender; the user must confirm that the hash
+belongs to the attempted action. Non-submission requires explicit wallet confirmation;
+recovery never automatically replays a trade. Real wallet-provider rehearsal remains
+separate from these component and adapter tests.
