@@ -12,6 +12,7 @@ for (const environment of ['staging', 'production']) {
   assert.equal(backend.variables.MARKETPLACE_CHAIN.value, environment === 'production' ? 'SN_MAIN' : 'SN_SEPOLIA');
   assert.deepEqual(web.variables.NEXT_PUBLIC_MARKETPLACE_CHAIN_ID, backend.variables.MARKETPLACE_CHAIN);
   assert.equal(resources.filter(r => r.type === 'volume').length, 1);
+  assert.equal(resources.find(r => r.type === 'volume').config.sizeMB, environment === 'production' ? 25600 : 5120);
   assert.equal(backend.volumeAttachments['marketplace-data'].mountPath, '/data');
   assert.deepEqual(backend.volumeAttachments['marketplace-data'].backupSchedules, ['DAILY', 'WEEKLY']);
   assert.equal(backend.deploy.requiredMountPath, '/data');

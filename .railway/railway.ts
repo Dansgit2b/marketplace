@@ -13,7 +13,7 @@ export default defineRailway((ctx) => {
   const prod = ctx.environment === 'production';
   const chain = prod ? 'SN_MAIN' : 'SN_SEPOLIA';
   // Environment-local resource: never attach staging to production data.
-  const data = volume('marketplace-data', { region: 'asia-southeast1-eqsg3a', sizeMB: 5120 });
+  const data = volume('marketplace-data', { region: 'asia-southeast1-eqsg3a', sizeMB: prod ? 25600 : 5120 });
   const backend = service('backend', {
     // No GitHub auto-deploy source: upload reviewed releases explicitly with railway up.
     build: { builder: 'DOCKERFILE', dockerfilePath: 'infra/railway/backend.Dockerfile' },

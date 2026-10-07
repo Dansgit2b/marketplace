@@ -2,8 +2,9 @@
 
 Railway is the selected host for the complete marketplace, confirmed 8 October
 2026. The supplied project `554683c6-4840-40d5-a60b-864d7d1f4c25` is provisioned with
-staging and production services and persistent volume instances. Trading and
-background indexing remain disabled pending deployment/RPC inputs. Existing Vercel previews are historical;
+staging and production services and persistent volume instances. Production is connected to the paused mainnet deployment and its index/metadata
+workers are backfilling Realms history. Staging services are deployed but still
+need a Sepolia RPC and test deployment. Trading remains disabled. Existing Vercel previews are historical;
 removing that GitHub integration is a separate account setting, not a code deploy.
 
 ## Topology
@@ -26,9 +27,10 @@ Railway volumes attach to one service and do not support replicas. Separate
 Railway API/indexer services cannot share this SQLite volume. Backend replicas
 are fixed at one, with no overlapping deployment. Expect brief backend downtime
 on redeploy; this is not a high-availability design. Frontend and backend default
-to Singapore, with an initial 5 GiB volume per environment; measure the Realms
-backfill and resize before capacity becomes tight. This is an initial allocation,
-not a measured storage requirement. See [Railway volume limits](https://docs.railway.com/volumes/reference).
+to Singapore, with 25 GiB for production and 5 GiB for staging. Production was increased after
+the initial 500-block sample occupied roughly 400 KiB before significant NFT
+events; the full 15.4-million-block history would exceed 5 GiB. Continue monitoring
+actual growth and metadata storage; this sample is not a final capacity forecast. See [Railway volume limits](https://docs.railway.com/volumes/reference).
 
 The frontend is a Next.js standalone container. It proxies `/api/marketplace/*`
 over `http://backend.railway.internal:3100` and exposes port 3000. Only `web` needs
@@ -257,3 +259,20 @@ relative order. It must run when provisioning a fresh environment. The staging
 probe reproduced a bypass before the rule, then verified normal traffic,
 per-visitor quotas and forged-header rejection after applying it. Default ingress
 behavior alone is not sufficient evidence of trusted client identity.
+
+## Mainnet bootstrap — 8 October 2026
+
+Production is connected to the [mainnet registry](../config/marketplace/registry.mainnet.json)
+and [verified deployment record](../config/marketplace/deployment.mainnet.json).
+The marketplace was deployed at block 16050533 and configured paused at block
+16050562. Initial fee is 500 bps; administrator and fee recipient are the approved
+local signer. Realms is the only NFT collection; STRK and LORDS are enabled.
+
+Production web: https://web-production-2a4cb.up.railway.app . Backend is private;
+the same-origin config endpoint exposes the deployment identity. Indexing starts
+at Realms block 664162, not at the marketplace deployment. About 15.4 million
+historical blocks remain at bootstrap; do not interpret container health as
+checkout readiness. Until marketplace history is reached, indexed configuration
+can be absent even though direct on-chain deployment verification has passed.
+No activation transaction has been sent. Full backfill/reconciliation, independent
+review, public-wallet acceptance and operating gates remain open.

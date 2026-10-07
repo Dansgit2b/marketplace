@@ -4,7 +4,7 @@ Version 1.3 · 8 October 2026
 
 **Start here.** This is the consolidated project plan. It joins the contract, indexer, API, existing frontend, OpenSea product benchmark, operations and migration into one delivery sequence. It supersedes earlier launch-boundary statements where they differ; supporting documents provide implementation detail and historical evidence.
 
-Status: implementation in progress. **Deployment remains blocked by the launch gates below.** The production dependency audit passes its high-severity gate; five moderate findings remain tracked in operations. Standalone Cairo settlement, the native Node indexer/API and retained-UI trading flows are implemented locally; integration and acceptance work is ongoing. No production deployment, independent audit, production backfill or staging soak is claimed. Track milestone completion here; supporting designs do not maintain competing status lists.
+Status: implementation in progress. **Trading activation remains blocked by the launch gates below.** The production dependency audit passes its high-severity gate; five moderate findings remain tracked in operations. Standalone Cairo settlement, the native Node indexer/API and retained-UI trading flows are implemented locally; integration and acceptance work is ongoing. A paused mainnet deployment and Railway connection were completed on 8 October 2026; independent audit, completed production backfill and staging soak are not claimed. Track milestone completion here; supporting designs do not maintain competing status lists.
 
 ## 1. Product outcome
 
@@ -430,6 +430,25 @@ smoke flows. Order-form layouts and keyboard focus were checked at 320, 768 and
 1440px. A signed devnet journey exercised fee changes, old-order quotes/settlement,
 SDK administration and a complete identical index replay. The signed local deployment CLI rehearsal also passed declaration/deployment, paused configuration, activation and handoff verification. This is local evidence;
 it does not close independent-review or public Sepolia/wallet launch gates.
+
+### Paused mainnet bootstrap — 8 October 2026
+
+The user authorized deployment following disclosure of the outstanding independent
+review and public Sepolia/wallet checks, and selected the signer as administrator,
+a 60 STRK per-transaction cap, a 500-bps fee, signer recipient, Realms and STRK/LORDS.
+The [deployment record](../config/marketplace/deployment.mainnet.json) contains the
+class/source hashes, original release commit and confirmed transactions. The
+[production registry](../config/marketplace/registry.mainnet.json) pins all addresses.
+Declaration, deployment and paused configuration succeeded; actual combined fees
+were 20.548421090207649568 STRK. A local mainnet fork at block 16049220 verified
+sample Realms 1038 listings, approval, NFT delivery and exact 95% seller proceeds
+with both real STRK and LORDS classes. This is sample compatibility evidence,
+not an exhaustive audit or public-wallet test.
+
+Railway production API/index/metadata services use the verified registry and have
+begun the full historical backfill. Production web is rebuilt for the deployment.
+Staging services remain separate on Sepolia and require their RPC/test deployment.
+This bootstrap does not mark L0–L6 complete or authorize trading activation.
 
 ### Release stages
 

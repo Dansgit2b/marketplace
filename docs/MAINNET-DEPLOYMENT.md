@@ -3,8 +3,10 @@
 These scripts prepare and execute the existing immutable v1 contract. They do
 not deploy infrastructure, create accounts, transfer funding, or place trades.
 [The build plan](BUILD-PLAN.md) owns launch approval; [operations](OPERATIONS.md)
-owns backend, frontend and recovery procedures. Mainnet remains blocked by the
-open audit, dependency, asset-compatibility and rehearsal gates recorded there.
+owns backend, frontend and recovery procedures. A paused mainnet bootstrap is recorded in
+[deployment.mainnet.json](../config/marketplace/deployment.mainnet.json). Trading
+activation remains subject to the open audit, compatibility, wallet and indexing
+gates in the build plan.
 
 ## Sequence and authority
 
@@ -82,7 +84,7 @@ health/trait restrictions are not encoded by this v1 contract.
 `release` contains references to the reviewed contract audit, asset compatibility
 matrix, public Sepolia rehearsal and human release approval. References are an
 audit trail, **not machine verification of those reports**. Mainnet sends require
-all four; this repository currently has no completed mainnet approval.
+all four; the bootstrap decision records internal/local evidence and the explicitly uncompleted independent/public acceptance checks. It is not approval to activate trading.
 
 ## 2. Probe identities and freeze a plan
 
