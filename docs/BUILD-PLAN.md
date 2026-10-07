@@ -447,7 +447,7 @@ not an exhaustive audit or public-wallet test.
 
 Railway production API/index/metadata services use the verified registry and have
 begun the full historical backfill. Production web is rebuilt for the deployment.
-Staging services remain separate on Sepolia and require their RPC/test deployment.
+Staging services remain separate on Sepolia with a verified PublicNode RPC. The selected signer is not deployed on Sepolia; a funded testnet deployer and test deployment remain outstanding.
 This bootstrap does not mark L0–L6 complete or authorize trading activation.
 
 ### Release stages

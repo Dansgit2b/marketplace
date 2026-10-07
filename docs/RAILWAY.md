@@ -4,7 +4,7 @@ Railway is the selected host for the complete marketplace, confirmed 8 October
 2026. The supplied project `554683c6-4840-40d5-a60b-864d7d1f4c25` is provisioned with
 staging and production services and persistent volume instances. Production is connected to the paused mainnet deployment and its index/metadata
 workers are backfilling Realms history. Staging services are deployed but still
-need a Sepolia RPC and test deployment. Trading remains disabled. Existing Vercel previews are historical;
+use a verified PublicNode Sepolia RPC but need a funded Sepolia deployer and test deployment. Trading remains disabled. Existing Vercel previews are historical;
 removing that GitHub integration is a separate account setting, not a code deploy.
 
 ## Topology
@@ -112,7 +112,7 @@ Mainnet defaults to the repository's Realms-only NFT profile when registry JSON 
 empty; staging defaults to an empty Sepolia collection registry. Neither is a
 completed marketplace deployment. Supply the matching chain's reviewed deployment
 export to `MARKETPLACE_REGISTRY_JSON` before enabling workers. Production's approved
-NFT list contains **only Realms**. Staging requires a real Sepolia test NFT and
+NFT list contains **only Realms**. Staging uses `https://starknet-sepolia-rpc.publicnode.com` (chain ID verified). It requires a funded testnet deployer, a real Sepolia test NFT and
 settlement deployment; never substitute the mainnet Realms address on Sepolia.
 The backend reads inline registry JSON without writing it into the image or volume.
 
