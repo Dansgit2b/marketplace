@@ -4,8 +4,8 @@ Railway is the selected host for the complete marketplace, confirmed 8 October
 2026. The supplied project `554683c6-4840-40d5-a60b-864d7d1f4c25` is provisioned with
 staging and production services and persistent volume instances. Production is connected to the paused mainnet deployment and its index/metadata
 workers are backfilling Realms history. Staging services are deployed but still
-use a verified PublicNode Sepolia RPC but need a funded Sepolia deployer and test deployment. Trading remains disabled. Existing Vercel previews are historical;
-removing that GitHub integration is a separate account setting, not a code deploy.
+use a verified PublicNode Sepolia RPC but need a funded Sepolia deployer and test deployment. Trading remains disabled. Existing Vercel previews are historical. `vercel.json` disables automatic Git
+deployments per [Vercel configuration](https://vercel.com/docs/project-configuration/git-configuration#turning-off-all-automatic-deployments); removing the installed integration itself remains an account setting.
 
 ## Topology
 

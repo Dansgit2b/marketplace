@@ -15,7 +15,9 @@ let stopped = false,
   lastProgress = null,
   lastError = null,
   releaseLease;
-const health = process.env.PORT
+// SQLite compatibility workers share the API container and must not bind its port.
+const healthPort = store.dialect === "postgres" ? process.env.PORT : process.env.MARKETPLACE_WORKER_PORT;
+const health = healthPort
   ? createServer((req, res) => {
       if (req.url !== "/health/live") {
         res.writeHead(404);
@@ -35,7 +37,7 @@ const health = process.env.PORT
     })
   : null;
 if (health)
-  health.listen(Number(process.env.PORT), process.env.MARKETPLACE_HOST ?? "::");
+  health.listen(Number(healthPort), process.env.MARKETPLACE_HOST ?? "::");
 for (const signal of ["SIGINT", "SIGTERM"])
   process.on(signal, () => {
     stopped = true;
