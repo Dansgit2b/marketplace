@@ -63,9 +63,9 @@ export function CollectionTools({ address }: { address: string }) {
     <section className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">Trade currency</span>
+          <span className="sr-only">Trade currency</span>
           <Select value={currency} onValueChange={setCurrency}>
-            <SelectTrigger className="w-32" aria-label="Trade currency">
+            <SelectTrigger className="min-h-11 w-24" aria-label="Trade currency">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -88,7 +88,7 @@ export function CollectionTools({ address }: { address: string }) {
           </CardContent>
         </Card>
       )}
-      <div className="grid gap-3 sm:grid-cols-3">
+      <details className="rounded-lg border p-3"><summary className="cursor-pointer text-sm">Market statistics · 7 days</summary><div className="mt-3 grid gap-3 sm:grid-cols-3">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-xs text-muted-foreground">
@@ -166,7 +166,7 @@ export function CollectionTools({ address }: { address: string }) {
             )}
           </CardContent>
         </Card>
-      </div>
+      </div></details>
     </section>
   );
 }

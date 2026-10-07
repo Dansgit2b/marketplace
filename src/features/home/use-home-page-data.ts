@@ -6,7 +6,6 @@ import type { ApiCollection } from "@/lib/marketplace/types";
 import type {
   CollectionCardData,
   FeaturedCollection,
-  SidebarCollection,
   TrendingToken,
 } from "./types";
 import { getCollectionBannerImage } from "@/lib/marketplace/collection-banners";
@@ -26,6 +25,7 @@ export function useHomePageData() {
         ?.price,
       currency,
     ),
+    floorCurrency: currency,
     totalSupply: c.tokenCount,
     listingCount: c.listingCount,
   }));
@@ -33,7 +33,6 @@ export function useHomePageData() {
     featuredCollection: (collectionCards[0] ??
       null) as FeaturedCollection | null,
     collectionCards,
-    sidebarCollections: collectionCards as SidebarCollection[],
     trendingTokens: [] as TrendingToken[],
     isLoading: query.isPending,
     isError: query.isError,

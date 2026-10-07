@@ -8,6 +8,60 @@ Deploy the non-upgradeable marketplace with explicit administrator, protocol fee
 
 Build without the `fixtures` feature for release. Keep private keys out of the backend: it verifies account signatures and may relay already-signed wallet invokes through `/rpc`, but never constructs signatures or holds custody. Operator authorization is separate from wallet sessions.
 
+## Release procedure
+
+For on-chain declaration/deployment and multisig configuration, use the
+[mainnet deployment sequence](MAINNET-DEPLOYMENT.md). Its generated registry and
+environment templates feed the service steps below. It does not modify live
+configuration or automatically activate trading.
+
+1. Resolve the build plan's open launch gates and record the intended Git commit,
+   chain, contract address/class/start block, administrator/fee recipient/rate,
+   reviewed collection/currency registry, public origin, RPC endpoints and operator.
+   The checked-in registry has no deployed marketplace; it cannot enable live trading.
+2. Run `pnpm install --frozen-lockfile`, `pnpm release:audit`, then `pnpm release:verify` on the release
+   checkout. This command builds for local fixtures; step 4 rebuilds for the actual
+   deployment. Run remote CI as well. Record results against the exact commit.
+   SDK packages must build before Next.js; HTTPS development follows the same rule.
+3. Create local `.env.backend` and `.env.frontend` from the matching examples.
+   Use HTTPS for the public origin and an independent operator secret. Set
+   `NEXT_PUBLIC_SITE_URL` to that origin. Keep frontend/backend chain and marketplace
+   addresses identical. Never put operator credentials or private RPC credentials
+   in `NEXT_PUBLIC_*` variables. The default same-origin API proxy avoids exposing
+   the private backend URL to browser code.
+4. Build and start the frontend with those explicit environment files:
+
+   ```sh
+   pnpm sdk:build
+   node --env-file=.env.frontend node_modules/next/dist/bin/next build
+   node --env-file=.env.frontend node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port 3000
+   ```
+
+   `NEXT_PUBLIC_*` values and the API rewrite destination are fixed during the build;
+   build separately for each environment. `.env.frontend` is not a Next.js automatic
+   filename. Ensure a local `.env.local` cannot supply unintended omitted values in
+   a release checkout. The current font build needs Google font download access.
+5. For the backend, use the native commands in README or
+   `docker compose -f compose.backend.yml up -d --build`. The latter requires
+   `.env.backend` and a working Docker daemon. Keep embedded indexing disabled:
+   Compose already starts separate index and metadata workers. The shared volume
+   holds chain/app databases and assets. Backend port 3100 is bound to loopback;
+   terminate frontend HTTPS at the chosen reverse proxy/platform. The native
+   frontend must reach `MARKETPLACE_API_URL`; another container would need the
+   backend's service hostname rather than its own localhost.
+6. Complete onboarding/backfill and external reconciliation below. Check
+   `/health/live` for process liveness and `/health/ready` for trading readiness.
+   A 503 while syncing, paused or undeployed is expected; a healthy container is
+   not sufficient evidence to enable trading. Rehearse wallet signatures,
+   accepted/indexed recovery, operator authorization, backups and rollback on
+   Sepolia before mainnet exposure.
+
+Deploying the frontend alone is a browse/demo release, not a marketplace launch.
+Do not copy fixture databases, test assets or devnet addresses into a deployment.
+`.dockerignore` excludes local environments, data, keys, caches and test artifacts
+from container build contexts. Archive investigation output under `.context/archive`;
+keep active server logs and `.context/toolchain` available to their running tools.
+
 ## Collection onboarding
 
 1. Verify contract address/class, ERC-721 interface, transfer/approval layouts, token URI encoding, royalties, dynamic metadata and any game eligibility rules at a fixed checkpoint. Determine the earliest required historical block.
@@ -43,9 +97,31 @@ Retain browse availability during bounded staleness; wallet writes remain disabl
 
 ## Content and authentication
 
-Set an independent random `MARKETPLACE_OPERATOR_TOKEN`; do not reuse a wallet key. `/ops` holds that credential only in component memory. Reports and moderation changes are authenticated and audited. Hidden collection content is removed from public discovery/detail. A content decision does not alter on-chain ownership or forcibly cancel orders; publish an operating/appeals policy before launch.
+Set an independent random `MARKETPLACE_OPERATOR_TOKEN`; do not reuse a wallet key. `/operator` holds that credential only in component memory. Reports and moderation changes are authenticated and audited. Hidden collection content is removed from public discovery/detail. A content decision does not alter on-chain ownership or forcibly cancel orders; publish an operating/appeals policy before launch.
 
 Wallet sessions use single-use, five-minute, origin-bound SNIP-12 challenges and on-chain `is_valid_signature` verification. Cookies are HttpOnly, SameSite=Strict and Secure on HTTPS. The devnet account verification test passed; Controller, Ready and Braavos still need real supported-wallet rehearsal. The retained Starknet React/Controller stack uses Starknet.js 8; upgrading it to a supported release is a launch-readiness task separate from the dependency-free backend.
+
+## Dependency audit — 7 October 2026
+
+Production dependency audit initially reported 2 critical, 41 high, 50 moderate
+and 4 low findings. Next.js and its ESLint configuration were updated from
+16.1.6 to 16.3.6; compatible-range transitive updates were applied. The resulting
+registry report is **0 critical, 19 high, 33 moderate and 1 low**. Advisory counts
+are not proof that every affected code path is exposed by this application.
+
+The remaining high findings involve `axios`, `defu`, `form-data`, `h3` and `ws`
+under Controller/WalletConnect and related wallet packages. They need supported
+upstream upgrades or reviewed replacements, followed by real-wallet rehearsal.
+No forced cross-range overrides or advisory suppression were added.
+`pnpm release:audit` currently fails and blocks deployment. Re-run it against the
+final lockfile; a passing fixture verification does not override this gate.
+
+The Next.js update covers the reported
+[AVIF optimization advisory](https://github.com/advisories/GHSA-2xp9-vwfh-vxw4)
+and [Windows server advisory](https://github.com/advisories/GHSA-p293-qw3h-jr36).
+Docker Compose syntax validates against the example environment, but a Docker
+daemon did not respond during this local preparation. Image build/container boot
+and production inputs remain unverified. No infrastructure was deployed.
 
 ## Release gates
 

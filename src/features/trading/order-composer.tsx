@@ -1,4 +1,5 @@
 "use client";
+import { WalletConnectButton } from "@/components/layout/wallet-connect-button";
 import { formatCurrencyAmount } from "@/lib/marketplace/amount-display";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -11,16 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useTrade } from "@/lib/marketplace/use-trade";
-import {
-  buildApproval,
-  buildCreateOrder,
-  buildNftApproval,
-  buildCancel,
-  parseRoyaltyBps,
-  parseAmount,
-  parseOrderKey,
-  type AccountCall,
-} from "@/lib/marketplace/write-adapter";
+import { prepareOrder, estimateSellerProceeds } from "@biblio/marketplace";
 
 import { TradeStatus } from "./trade-status";
 export function OrderComposer({
@@ -51,61 +43,33 @@ export function OrderComposer({
   let preview: string | null = null;
   try {
     if (selected && price) {
-      const p = BigInt(parseAmount(price, selected.decimals));
-      const fee = (p * BigInt(trade.config?.feeBps ?? 0)) / 10000n;
-      const cap = (p * parseRoyaltyBps(royalty)) / 10000n;
-      preview = ((p - fee - cap) * BigInt(count)).toString();
+      preview = estimateSellerProceeds({
+        price,
+        decimals: selected.decimals,
+        feeBps: trade.config?.feeBps ?? 0,
+        royaltyPercent: royalty,
+        count,
+      });
     }
   } catch {
     /* Incomplete user input has no valid preview. */
   }
   async function submit() {
     await trade.execute(async (marketplace) => {
-      if (!selected || !count || count > 25)
-        throw new Error("Choose a currency and 1–25 assets.");
-      const amount = parseAmount(price, selected.decimals);
-      const capBps = parseRoyaltyBps(royalty);
-      const royaltyCap = (
-        (BigInt(amount) * BigInt(capBps)) /
-        10000n
-      ).toString();
-      const expiry = Math.floor(Date.now() / 1000) + Number(duration);
-      const calls: AccountCall[] = [];
-      for (const id of replaceIds) {
-        const key = parseOrderKey(id, trade.config!.chain, marketplace);
-        if (BigInt(key.maker) !== BigInt(trade.address!))
-          throw new Error("Only your orders can be replaced.");
-        calls.push(buildCancel(marketplace, key.nonce));
-      }
-      if (kind !== "listing")
-        calls.push(
-          buildApproval(
-            selected.address,
-            marketplace,
-            (BigInt(amount) * BigInt(count)).toString(),
-          ),
-        );
-      for (const asset of kind === "collection_offer"
-        ? [{ collection, tokenId: undefined }]
-        : assets) {
-        if (kind === "listing")
-          calls.push(
-            buildNftApproval(asset.collection, marketplace, asset.tokenId!),
-          );
-        calls.push(
-          buildCreateOrder({
-            marketplace,
-            kind,
-            collection: asset.collection,
-            tokenId: asset.tokenId,
-            currency: selected.address,
-            price: amount,
-            expiry,
-            royaltyCap,
-          }),
-        );
-      }
-      return calls;
+      if (!selected) throw new Error("Choose a currency.");
+      return prepareOrder(
+        { marketplace, chain: trade.config!.chain, account: trade.address! },
+        {
+          kind,
+          collection,
+          assets,
+          currency: selected,
+          price,
+          royaltyPercent: royalty,
+          durationSeconds: Number(duration),
+          replaceIds,
+        },
+      );
     });
   }
   const title =
@@ -188,23 +152,29 @@ export function OrderComposer({
           ? `Minimum seller proceeds at this royalty cap: ${formatCurrencyAmount(preview, selected?.address, selected?.decimals)} ${selected?.symbol ?? ""}`
           : "Enter terms to preview seller proceeds."}
       </p>
-      <Button
-        onClick={() => void submit()}
-        disabled={
-          trade.busy ||
-          !trade.address ||
-          !price ||
-          !count ||
-          !!trade.config?.demo
-        }
-        className="w-full"
-      >
-        {trade.busy
-          ? "Processing…"
-          : !trade.address
-            ? "Connect wallet to trade"
-            : title}
-      </Button>
+      {!trade.address ? (
+        <WalletConnectButton className="w-full">
+          Connect wallet to trade
+        </WalletConnectButton>
+      ) : (
+        <Button
+          onClick={() => void submit()}
+          disabled={
+            trade.busy ||
+            !trade.address ||
+            !price ||
+            !count ||
+            !!trade.config?.demo
+          }
+          className="w-full"
+        >
+          {trade.busy
+            ? "Processing…"
+            : !trade.address
+              ? "Connect wallet to trade"
+              : title}
+        </Button>
+      )}
       <TradeStatus state={trade.state} />
     </div>
   );

@@ -15,13 +15,19 @@ export function ReportToken({
   const [open, setOpen] = useState(false),
     [reason, setReason] = useState(""),
     [message, setMessage] = useState("");
+  const [sending, setSending] = useState(false);
   async function report() {
+    if (sending) return;
+    setSending(true);
+    setMessage("");
     try {
       await marketplaceRequest("/reports", {}, { collection, tokenId, reason });
       setMessage("Report submitted for review.");
       setReason("");
     } catch (e) {
       setMessage(e instanceof Error ? e.message : "Unable to report.");
+    } finally {
+      setSending(false);
     }
   }
   return (
@@ -48,10 +54,10 @@ export function ReportToken({
                 onChange={(e) => setReason(e.target.value)}
               />
               <Button
-                disabled={reason.trim().length < 5}
+                disabled={sending || reason.trim().length < 5}
                 onClick={() => void report()}
               >
-                Submit report
+                {sending ? "Sending report…" : "Submit report"}
               </Button>
             </>
           )}

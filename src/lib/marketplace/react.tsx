@@ -1,6 +1,7 @@
 "use client";
 import { configureCurrencyDecimals } from "./amount-display";
-import { useQuery } from "@tanstack/react-query";
+import { useClientQuery } from "@biblio/marketplace-react";
+import {getAppMarketplaceClient} from "./app-client";
 import type { ReactNode } from "react";
 import {
   fetchCollectionTokens,
@@ -30,7 +31,7 @@ export function useMarketplaceCollection(
   o: CollectionSummaryOptions,
   q: Options = {},
 ) {
-  return useQuery({
+  return useClientQuery(getAppMarketplaceClient(),{
     queryKey: ["owned", "collection", o],
     queryFn: () => ownedClient.getCollection(o),
     enabled: !!o.address && q.enabled !== false,
@@ -40,7 +41,7 @@ export function useMarketplaceCollectionTokens(
   o: FetchCollectionTokensOptions,
   q: Options = {},
 ) {
-  return useQuery({
+  return useClientQuery(getAppMarketplaceClient(),{
     queryKey: ["owned", "tokens", o],
     queryFn: () => fetchCollectionTokens(o),
     enabled: !!o.address && q.enabled !== false,
@@ -53,7 +54,7 @@ export function useMarketplaceCollectionListings(
 ) {
   const currency = useMarketCurrency((s) => s.currency);
   const options = { ...o, currency: o.currency ?? currency };
-  return useQuery({
+  return useClientQuery(getAppMarketplaceClient(),{
     queryKey: ["owned", "listings", options],
     queryFn: () => ownedClient.listCollectionListings(options),
     enabled: !!o.collection && q.enabled !== false,
@@ -63,14 +64,14 @@ export function useMarketplaceCollectionOrders(
   o: CollectionOrdersOptions,
   q: Options = {},
 ) {
-  return useQuery({
+  return useClientQuery(getAppMarketplaceClient(),{
     queryKey: ["owned", "orders", o],
     queryFn: () => ownedClient.getCollectionOrders(o),
     enabled: !!o.collection && q.enabled !== false,
   });
 }
 export function useMarketplaceToken(o: TokenDetailsOptions, q: Options = {}) {
-  return useQuery({
+  return useClientQuery(getAppMarketplaceClient(),{
     queryKey: ["owned", "token", o],
     queryFn: () => ownedClient.getToken(o),
     enabled: !!o.collection && q.enabled !== false,
@@ -80,14 +81,14 @@ export function useMarketplaceTokenBalances(
   o: FetchTokenBalancesOptions,
   q: Options = {},
 ) {
-  return useQuery({
+  return useClientQuery(getAppMarketplaceClient(),{
     queryKey: ["owned", "balances", o],
     queryFn: () => fetchTokenBalances(o),
     enabled: q.enabled !== false,
   });
 }
 export function useMarketConfig() {
-  return useQuery({
+  return useClientQuery(getAppMarketplaceClient(),{
     queryKey: ["owned", "config"],
     queryFn: async () => {
       const config = await marketplaceRequest<MarketConfig>(

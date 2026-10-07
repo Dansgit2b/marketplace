@@ -1,4 +1,5 @@
-import { getMarketplaceRuntimeConfig } from "./config";
+import { getAppMarketplaceClient } from "./app-client";
+export { MarketplaceApiError } from "@biblio/marketplace";
 import type {
   ApiCollection,
   ApiOrder,
@@ -15,52 +16,18 @@ import type {
 } from "./types";
 export const DEFAULT_CURRENCY =
   "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
-export class MarketplaceApiError extends Error {
-  constructor(
-    message: string,
-    public code: string,
-    public status: number,
-  ) {
-    super(message);
-  }
-}
+/** Compatibility for retained app view models. Transport and TanStack Query live in the SDK. */
 export async function marketplaceRequest<T>(
   path: string,
   query: Record<string, unknown> = {},
   body?: unknown,
 ): Promise<T> {
-  const chain = getMarketplaceRuntimeConfig().chainLabel;
-  const base =
-    typeof window === "undefined"
-      ? (process.env.MARKETPLACE_API_URL ?? "http://127.0.0.1:3100")
-      : (process.env.NEXT_PUBLIC_MARKETPLACE_API_BASE ?? "/api/marketplace");
-  const params = new URLSearchParams();
-  for (const [key, value] of Object.entries(query))
-    if (value !== undefined && value !== null)
-      params.set(
-        key,
-        typeof value === "object" ? JSON.stringify(value) : String(value),
-      );
-  const response = await fetch(
-    `${base}/v1/chains/${chain}${path}${params.size ? "?" + params : ""}`,
-    {
-      method: body === undefined ? "GET" : "POST",
-      headers:
-        body === undefined ? undefined : { "content-type": "application/json" },
-      body: body === undefined ? undefined : JSON.stringify(body),
-      credentials: "include",
-      signal: AbortSignal.timeout(15000),
-      cache: "no-store",
-    },
-  );
-  const payload = await response.json();
-  if (!response.ok)
-    throw new MarketplaceApiError(
-      payload.error?.message ?? "Marketplace request failed",
-      payload.error?.code ?? "API_ERROR",
-      response.status,
-    );
-  return payload.data as T;
+  const client = getAppMarketplaceClient();
+  try {
+    return await client.request<T>(path, query, body);
+  } finally {
+    if (typeof window === "undefined") client.dispose();
+  }
 }
 export function tokenFromApi(t: ApiToken): NormalizedToken {
   return {
@@ -178,8 +145,12 @@ export async function fetchTokenBalances(
   const page = await marketplaceRequest<ApiPage<ApiToken>>(
     `/accounts/${o.accountAddresses[0]}/holdings`,
     {
-      collection: o.contractAddresses?.length===1?o.contractAddresses[0]:undefined,
-      collections:o.contractAddresses&&o.contractAddresses.length>1?o.contractAddresses:undefined,
+      collection:
+        o.contractAddresses?.length === 1 ? o.contractAddresses[0] : undefined,
+      collections:
+        o.contractAddresses && o.contractAddresses.length > 1
+          ? o.contractAddresses
+          : undefined,
       tokenIds: o.tokenIds,
       limit: Math.min(o.limit ?? 100, 100),
       cursor: o.cursor,

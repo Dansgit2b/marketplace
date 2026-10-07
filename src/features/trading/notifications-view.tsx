@@ -1,5 +1,7 @@
 "use client";
+import { WalletConnectButton } from "@/components/layout/wallet-connect-button";
 import Link from "next/link";
+import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useWalletSession } from "@/lib/marketplace/use-wallet-session";
 import { marketplaceRequest } from "@/lib/marketplace/api-client";
@@ -23,9 +25,24 @@ export function NotificationsView() {
     enabled: session.verified,
     refetchInterval: 15000,
   });
+  const [marking, setMarking] = useState<string | null>(null),
+    [markError, setMarkError] = useState("");
   async function mark(id: string) {
-    await marketplaceRequest("/notifications/read", {}, { id });
-    await client.invalidateQueries({ queryKey: ["owned", "notifications"] });
+    if (marking) return;
+    setMarking(id);
+    setMarkError("");
+    try {
+      await marketplaceRequest("/notifications/read", {}, { id });
+      await client.invalidateQueries({ queryKey: ["owned", "notifications"] });
+    } catch (error) {
+      setMarkError(
+        error instanceof Error
+          ? error.message
+          : "Unable to update notification.",
+      );
+    } finally {
+      setMarking(null);
+    }
   }
   return (
     <main className="mx-auto max-w-3xl space-y-5 p-4 sm:p-8">
@@ -33,17 +50,16 @@ export function NotificationsView() {
       <p className="text-sm text-muted-foreground">
         Offers and trades for your verified wallet.
       </p>
+      {markError && (
+        <p role="alert" className="text-sm text-destructive">
+          {markError}
+        </p>
+      )}
       {!session.verified ? (
         <Card>
           <CardContent className="space-y-3 p-5">
-            <Button
-              disabled={session.busy || !session.connectedAddress}
-              onClick={() => void session.login()}
-            >
-              {session.connectedAddress
-                ? "Verify wallet"
-                : "Connect wallet first"}
-            </Button>
+            {!session.connectedAddress ? <WalletConnectButton>Connect wallet to view notifications</WalletConnectButton> : <Button disabled={session.busy} onClick={() => void session.login()}>Verify wallet</Button>}
+
             <p role="status">{session.error}</p>
           </CardContent>
         </Card>
@@ -78,9 +94,10 @@ export function NotificationsView() {
                 <Button
                   variant="outline"
                   size="sm"
+                  disabled={!!marking}
                   onClick={() => void mark(n.id)}
                 >
-                  Mark read
+                  {marking === n.id ? "Saving…" : "Mark read"}
                 </Button>
               )}
             </CardContent>

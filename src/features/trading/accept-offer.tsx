@@ -1,30 +1,17 @@
 "use client";
+import { getTokenSymbol } from "@/lib/marketplace/token-display";
+import { TradeStatus } from "./trade-status";
 import { formatCurrencyAmount } from "@/lib/marketplace/amount-display";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import type { ApiOrder } from "@/lib/marketplace/types";
 import { useTrade } from "@/lib/marketplace/use-trade";
 import { marketplaceRequest } from "@/lib/marketplace/api-client";
 import {
-  parseOrderKey,
-  buildNftApproval,
-  uint256,
-} from "@/lib/marketplace/write-adapter";
-import { getTokenSymbol } from "@/lib/marketplace/token-display";
-import { TradeStatus } from "./trade-status";
-type Quote = {
-  canSubmit: boolean;
-  reasons: string[];
-  expiresAt: number;
-  rows: Array<{
-    valid: boolean;
-    message?: string;
-    sellerProceeds: string;
-    protocolFee: string;
-    royaltyAmount: string;
-    needsNftApproval: boolean;
-  }>;
-};
+  previewOffer,
+  prepareAcceptance,
+  type Preflight as Quote,
+} from "@biblio/marketplace";
 export function AcceptOffer({
   order,
   tokenId,
@@ -33,62 +20,56 @@ export function AcceptOffer({
   tokenId: string;
 }) {
   const trade = useTrade();
-  const [quote, setQuote] = useState<Quote | null>(null),
-    [error, setError] = useState("");
+  const scope = [
+    order.id,
+    tokenId,
+    trade.address,
+    trade.config?.chain,
+    trade.config?.marketplace,
+  ].join(":");
+  const [review, setReview] = useState<{ scope: string; quote: Quote } | null>(
+    null,
+  );
+  const quote = review?.scope === scope ? review.quote : null;
+  const requestSequence = useRef(0);
+  const [previewPending, setPreviewPending] = useState(false);
+  const [error, setError] = useState("");
   async function preview() {
+    const sequence = ++requestSequence.current;
+    setReview(null);
+    setPreviewPending(true);
     try {
       setError("");
       if (!trade.config?.marketplace)
         throw new Error("Market is not configured.");
-      const key = parseOrderKey(
-        order.id,
-        trade.config.chain,
-        trade.config.marketplace,
-      );
-      const result = await marketplaceRequest<Quote>(
-        "/checkout/preflight",
-        {},
+      const result = await previewOffer(
+        marketplaceRequest,
         {
-          action: "accept",
-          account: trade.address,
-          items: [{ ...key, tokenId }],
+          marketplace: trade.config.marketplace,
+          chain: trade.config.chain,
+          account: trade.address!,
         },
+        order,
+        tokenId,
       );
-      if (!result.canSubmit)
-        throw new Error(
-          result.reasons.join(", ") ||
-            result.rows.find((r) => !r.valid)?.message ||
-            "Offer unavailable.",
-        );
-      setQuote(result);
+      if (sequence === requestSequence.current)
+        setReview({ scope, quote: result });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Preview failed.");
+      if (sequence === requestSequence.current)
+        setError(e instanceof Error ? e.message : "Preview failed.");
+    } finally {
+      if (sequence === requestSequence.current) setPreviewPending(false);
     }
   }
   async function accept() {
     await trade.execute((m) => {
-      if (!quote || quote.expiresAt <= Math.floor(Date.now() / 1000))
-        throw new Error("Preview expired. Review the offer again.");
-      const key = parseOrderKey(order.id, trade.config!.chain, m),
-        row = quote.rows[0],
-        calls = [];
-      if (row.needsNftApproval)
-        calls.push(buildNftApproval(order.collection, m, tokenId));
-      calls.push({
-        contractAddress: m,
-        entrypoint:
-          order.kind === "collection_offer"
-            ? "accept_collection_offer"
-            : "accept_offer",
-        calldata: [
-          key.maker,
-          key.nonce,
-          ...(order.kind === "collection_offer" ? uint256(tokenId) : []),
-          order.currency,
-          ...uint256(row.sellerProceeds),
-        ],
-      });
-      return calls;
+      if (!quote) throw new Error("Review the offer again.");
+      return prepareAcceptance(
+        { marketplace: m, chain: trade.config!.chain, account: trade.address! },
+        order,
+        tokenId,
+        quote,
+      );
     });
   }
   return (
@@ -96,10 +77,12 @@ export function AcceptOffer({
       <Button
         size="sm"
         variant="outline"
-        disabled={trade.busy || !trade.address || !!trade.config?.demo}
+        disabled={
+          previewPending || trade.busy || !trade.address || !!trade.config?.demo
+        }
         onClick={() => void preview()}
       >
-        Review offer
+        {previewPending ? "Checking offer…" : "Review offer"}
       </Button>
       {quote && (
         <div className="rounded-md border p-3 text-sm">

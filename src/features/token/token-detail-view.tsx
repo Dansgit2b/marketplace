@@ -1,4 +1,8 @@
 "use client";
+import { ListingPurchase } from "./listing-purchase";
+import { TokenActivity, type TokenActivityItem } from "./token-activity";
+import { useCartStore } from "@/features/cart/store/cart-store";
+import { getMarketplaceRuntimeConfig } from "@/lib/marketplace/config";
 import { formatCurrencyAmount } from "@/lib/marketplace/amount-display";
 import { BestBid } from "@/features/trading/best-bid";
 import { AcceptOffer } from "@/features/trading/accept-offer";
@@ -28,7 +32,7 @@ import {
 import { OrderComposer } from "@/features/trading/order-composer";
 import { TradeStatus } from "@/features/trading/trade-status";
 import { marketplaceRequest } from "@/lib/marketplace/api-client";
-import { buildCancel, parseOrderKey } from "@/lib/marketplace/write-adapter";
+import { prepareCancellation } from "@biblio/marketplace";
 import type { ApiOrder, ApiPage } from "@/lib/marketplace/types";
 export function TokenDetailView({
   address,
@@ -57,6 +61,8 @@ export function TokenDetailView({
     walletAddress: trade.address,
     isConnected: !!trade.address,
   });
+  const cartItems = useCartStore(s=>s.items);
+  const setCartOpen = useCartStore(s=>s.setOpen);
   const { addListingToCart } = useAddToCartFeedback();
   const offers = useInfiniteQuery<ApiPage<ApiOrder>>({
     initialPageParam:undefined as string|undefined,
@@ -69,20 +75,11 @@ export function TokenDetailView({
         limit: 50,cursor:pageParam,
       }),
   });
-  const activity = useInfiniteQuery<ApiPage<{id:string;type:string;buyerDebit?:string;currency?:string;provenance:{timestamp:number}}>>({
-    initialPageParam:undefined as string|undefined,
-    getNextPageParam:page=>page.nextCursor??undefined,
+  const activity = useInfiniteQuery<ApiPage<TokenActivityItem>>({
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: page => page.nextCursor ?? undefined,
     queryKey: ["owned", "activity", address, tokenId],
-    queryFn: ({pageParam}) =>
-      marketplaceRequest<
-        ApiPage<{
-          id: string;
-          type: string;
-          buyerDebit?: string;
-          currency?: string;
-          provenance: { timestamp: number };
-        }>
-      >(`/tokens/${address}/${tokenId}/activity`, { limit: 20,cursor:pageParam }),
+    queryFn: ({pageParam}) => marketplaceRequest<ApiPage<TokenActivityItem>>(`/tokens/${address}/${tokenId}/activity`, {limit:20,cursor:pageParam}),
   });
   const offerItems=offers.data?.pages.flatMap(page=>page.items)??[];
   const activityItems=activity.data?.pages.flatMap(page=>page.items)??[];
@@ -110,8 +107,8 @@ export function TokenDetailView({
     attributes?: Array<{ trait_type: string; value: unknown }>;
   };
   return (
-    <main
-      className="mx-auto max-w-7xl space-y-6 p-4 md:p-8"
+    <div
+      className="mx-auto max-w-7xl space-y-4"
       data-testid="token-detail"
     >
       <Link
@@ -120,7 +117,7 @@ export function TokenDetailView({
       >
         ← Collection
       </Link>
-      <div className="grid gap-8 lg:grid-cols-2">
+      <div className="grid gap-6 lg:grid-cols-2">
         <div className="relative aspect-square overflow-hidden rounded-xl border bg-muted">
           {image ? (
             <Image
@@ -152,54 +149,13 @@ export function TokenDetailView({
               <CardTitle>Listings</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              {listings.data?.length ? (
-                listings.data.map((l) => (
-                  <div
-                    key={l.id}
-                    className="flex items-center justify-between gap-3"
-                  >
-                    <span>
-                      {formatCurrencyAmount(l.price, l.currency)}{" "}
-                      {getTokenSymbol(l.currency)}
-                    </span>
-                    <Button
-                      size="sm"
-                      disabled={
-                        !!trade.address &&
-                        BigInt(l.owner) === BigInt(trade.address)
-                      }
-                      onClick={() => {
-                        const chosen = cheapestListingByTokenId([l]).get(
-                          BigInt(tokenId).toString(),
-                        );
-                        if (chosen)
-                          addListingToCart(
-                            cartItemFromTokenListing(token, address, chosen),
-                          );
-                      }}
-                    >
-                      Add to cart
-                    </Button>
-                  </div>
-                ))
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  No active listings.
-                </p>
-              )}
-              {cheapest && (
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={() =>
-                    addListingToCart(
-                      cartItemFromTokenListing(token, address, cheapest),
-                    )
-                  }
-                >
-                  Add cheapest to cart
-                </Button>
-              )}
+              {listings.isError ? <p role="alert">Listing prices are unavailable. <Button variant="outline" onClick={()=>void listings.refetch()}>Retry</Button></p> : listings.isPending ? <p>Loading price…</p> : <ListingPurchase
+                price={cheapest?.price} currency={cheapest?.currency}
+                inCart={!!cheapest && cartItems.some(item=>item.orderId===cheapest.orderId)}
+                isOwner={ownership.effectiveIsOwner}
+                onViewCart={()=>setCartOpen(true)}
+                onAdd={()=>{if(cheapest) addListingToCart(cartItemFromTokenListing(token,address,cheapest));}}
+              />}
             </CardContent>
           </Card>
           {ownership.effectiveIsOwner ? (
@@ -211,13 +167,7 @@ export function TokenDetailView({
                     disabled={trade.busy}
                     onClick={() =>
                       void trade.execute(
-                        (m) => [
-                          buildCancel(
-                            m,
-                            parseOrderKey(myListing.id, trade.config!.chain, m)
-                              .nonce,
-                          ),
-                        ],
+                        (m) => prepareCancellation({marketplace:m,chain:trade.config!.chain,account:trade.address!},[myListing.id]),
                         "cancel",
                       )
                     }
@@ -315,17 +265,7 @@ export function TokenDetailView({
         </CardHeader>
         <CardContent>
           {activityItems.length ? (
-            activityItems.map((a) => (
-              <div
-                className="flex justify-between gap-4 border-b py-3 text-sm"
-                key={a.id}
-              >
-                <span>{a.type.replaceAll("_", " ")}</span>
-                <span className="text-muted-foreground">
-                  {new Date(a.provenance.timestamp * 1000).toLocaleString()}
-                </span>
-              </div>
-            ))
+            <TokenActivity items={activityItems} chain={getMarketplaceRuntimeConfig().chainLabel} />
           ) : (
             <p className="text-sm text-muted-foreground">
               {activity.isPending?"Loading activity…":activity.isError?"Activity is unavailable. Try again shortly.":"No indexed activity yet."}
@@ -335,6 +275,6 @@ export function TokenDetailView({
       </Card>
       {activity.hasNextPage&&<Button variant="outline" disabled={activity.isFetchingNextPage} onClick={()=>void activity.fetchNextPage()}>More activity</Button>}
       <ReportToken collection={address} tokenId={tokenId} />
-    </main>
+    </div>
   );
 }

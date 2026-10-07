@@ -261,11 +261,11 @@ describe("collection route view", () => {
     render(<CollectionRouteView address="0xabc" collections={collections} />);
 
     expect(screen.getByTestId("trait-sidebar-container")).toHaveClass(
-      "sticky",
-      "top-24",
+      "xl:sticky",
+      "xl:top-36",
       "self-start",
-      "max-h-[calc(100vh-7rem)]",
-      "overflow-y-auto",
+      "xl:max-h-[calc(100vh-10rem)]",
+      "xl:overflow-y-auto",
     );
   });
 

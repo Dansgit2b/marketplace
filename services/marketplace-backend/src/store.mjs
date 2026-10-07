@@ -288,6 +288,12 @@ export class Store {
         { ...cfg, admin: e.admin, updatedAt: p },
         height,
       );
+      this.put(
+        "config",
+        "pending_admin",
+        { admin: address("0"), updatedAt: p },
+        height,
+      );
     } else if (e.type === "admin_proposed") {
       this.put(
         "config",

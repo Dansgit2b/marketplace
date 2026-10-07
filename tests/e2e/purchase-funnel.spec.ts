@@ -21,7 +21,7 @@ test.describe("purchase funnel skeleton", () => {
     await page.waitForURL(/\/collections\//, { timeout: 30_000 });
 
     const addButtons = page
-      .getByRole("button", { name: "Buy Now" })
+      .getByRole("button", { name: "Add to cart" })
       .filter({ hasNotText: "Added" });
     await expect(addButtons.first()).toBeVisible();
     const hasAddableListing = (await addButtons.count()) > 0;
@@ -33,7 +33,7 @@ test.describe("purchase funnel skeleton", () => {
     await expect(page.getByText("Your cart is empty.")).toHaveCount(0);
   });
 
-  test("adds cheapest listing to cart from token detail", async ({ page }) => {
+  test("adds the displayed listing to cart from token detail", async ({ page }) => {
     await page.goto("/");
 
     await openFirstCollection(page);
@@ -47,7 +47,7 @@ test.describe("purchase funnel skeleton", () => {
     await tokenLinks.first().click();
     await expect(page).toHaveURL(/\/collections\/.+\/.+/);
 
-    const addCheapest = page.getByRole("button", { name: "Add cheapest to cart" });
+    const addCheapest = page.getByRole("button", { name: "Add to cart" });
     await expect(addCheapest).toBeVisible();
     test.skip(await addCheapest.isDisabled(), "No purchasable listing on token detail.");
 

@@ -82,3 +82,82 @@ test("wallet RPC relay permits required wallet calls and rejects unrelated metho
   assert.equal(denied.error.code, -32601);
   assert.equal(calls.length, 1);
 });
+test("transaction reflection includes canonical governance events and is invalidated by rewind", async (t) => {
+  const s = new Store(":memory:");
+  s.applyBlock({
+    number: 1,
+    hash: "0x11",
+    parentHash: "0x0",
+    timestamp: 1,
+    events: [
+      {
+        type: "initialized",
+        version: 1,
+        admin: address("2"),
+        feeBps: 200,
+        feeRecipient: address("4"),
+        paused: false,
+        transactionHash: "0xa",
+      },
+    ],
+  });
+  s.applyBlock({
+    number: 2,
+    hash: "0x12",
+    parentHash: "0x11",
+    timestamp: 2,
+    events: [
+      { type: "trading_changed", paused: true, transactionHash: "0xb" },
+      {
+        type: "collection_policy",
+        address: address("9"),
+        enabled: true,
+        royalties: true,
+        transactionHash: "0xc",
+      },
+      {
+        type: "currency_policy",
+        address: address("3"),
+        enabled: true,
+        transactionHash: "0xd",
+      },
+      { type: "admin_proposed", admin: address("5"), transactionHash: "0xe" },
+      {
+        type: "admin_transferred",
+        previous: address("2"),
+        admin: address("5"),
+        transactionHash: "0xf",
+      },
+    ],
+  });
+  const api = createApi({
+    store: s,
+    config: {
+      chain: "LOCAL",
+      chainId: "0x1",
+      marketplace: "0x9",
+      collections: [],
+      currencies: [],
+    },
+  });
+  await new Promise((r) => api.listen(0, "127.0.0.1", r));
+  t.after(() => {
+    api.closeAllConnections();
+    api.close();
+    s.close();
+  });
+  const get = async (hash) =>
+    (
+      await (
+        await fetch(
+          `http://127.0.0.1:${api.address().port}/v1/chains/LOCAL/transactions/${hash}`,
+        )
+      ).json()
+    ).data;
+  for (const hash of ["0xa", "0xb", "0xc", "0xd", "0xe", "0xf"])
+    assert.equal((await get(hash)).reflected, true, hash);
+  assert.equal((await get("0x999?block=2")).reflected, false);
+  s.rewind(1);
+  assert.equal((await get("0xb")).reflected, false);
+  assert.equal((await get("0xa")).reflected, true);
+});

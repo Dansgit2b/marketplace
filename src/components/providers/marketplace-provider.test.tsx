@@ -112,3 +112,5 @@ describe("marketplace provider", () => {
     expect(mockMarketplaceClientProviderConfig).toHaveBeenCalledWith(sdkConfig);
   });
 });
+
+vi.mock("@/lib/marketplace/app-client",()=>({getAppMarketplaceClient:()=>({queryClient:{query:"client"}})}));

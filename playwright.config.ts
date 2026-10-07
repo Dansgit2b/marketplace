@@ -11,6 +11,7 @@ export default defineConfig({
   use: {
     baseURL: "http://127.0.0.1:3400",
     trace: "on-first-retry",
+    launchOptions: { executablePath: process.env.CHROMIUM_EXECUTABLE_PATH },
     navigationTimeout: 30_000,
   },
   projects: [

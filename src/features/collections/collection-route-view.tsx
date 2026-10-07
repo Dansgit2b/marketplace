@@ -1,4 +1,6 @@
 "use client";
+import { CollectionBanner } from "./collection-banner";
+import { CollectionBrowseLayout } from "./collection-browse-layout";
 import {formatCurrencyAmount} from "@/lib/marketplace/amount-display";
 
 import { useSweepCandidates } from "./use-sweep-candidates";
@@ -391,35 +393,8 @@ export function CollectionRouteView({
   );
 
   return (
-    <section className="w-full space-y-6 pb-20">
-      {/* Collection hero banner — breaks out of parent padding for full-bleed */}
-      <div
-        ref={heroRef}
-        className="relative -mx-4 overflow-hidden border-y border-[color:var(--realm-border-etched)] bg-[color:var(--realm-surface-iron)] sm:-mx-6 lg:-mx-8"
-        data-testid="collection-header-image"
-      >
-        {headerImage ? (
-          <>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              alt={`${displayName ?? selectedCollection?.name ?? address} banner`}
-              className="hero-image h-56 w-full object-cover object-center"
-              src={headerImage}
-            />
-            {/* Gradient overlay for text readability */}
-            <div className="absolute inset-0 bg-gradient-to-t from-[color:var(--realm-bg-void)] via-[color:var(--realm-bg-void)]/50 to-transparent" />
-          </>
-        ) : (
-          <div className="h-56 w-full bg-[radial-gradient(circle_at_30%_20%,rgba(231,207,136,0.18),transparent_20rem),linear-gradient(145deg,#161b20,#070b0d)]" />
-        )}
-
-        {/* Overlay content */}
-        <div className="hero-content absolute inset-x-0 bottom-0 flex flex-wrap items-end justify-between gap-3 px-4 pb-5 sm:px-6 lg:px-8">
-          {/* Collection name */}
-          <h1 className="realm-title text-4xl text-[color:var(--realm-title)] drop-shadow-[0_2px_12px_rgba(0,0,0,0.7)]">
-            {displayName ?? selectedCollection?.name ?? address}
-          </h1>
-
+    <section className="w-full space-y-4 pb-20">
+      <CollectionBanner ref={heroRef} image={headerImage} name={displayName ?? selectedCollection?.name ?? address}>
           {/* Stats */}
           <div className="flex flex-wrap items-center gap-2 text-sm">
             {listingCount > 0 && (
@@ -436,8 +411,7 @@ export function CollectionRouteView({
               </span>
             )}
           </div>
-        </div>
-      </div>
+      </CollectionBanner>
 
       {collection.isSuccess && !collection.data ? (
         <p className="text-sm text-muted-foreground font-mono">
@@ -446,11 +420,7 @@ export function CollectionRouteView({
         </p>
       ) : null}
 
-      <div className="grid gap-6 xl:grid-cols-[280px_1fr]">
-        <div
-          className="sticky top-24 self-start max-h-[calc(100vh-7rem)] overflow-y-auto"
-          data-testid="trait-sidebar-container"
-        >
+      <CollectionBrowseLayout activeCount={Object.keys(resolvedActiveFilters).length} filters={
           <TraitFilterSidebar
             collectionAddress={address}
             traitNames={traitNamesQuery.data ?? []}
@@ -462,9 +432,7 @@ export function CollectionRouteView({
             openTraitName={openTraitName}
             onOpenTraitNameChange={setOpenTraitName}
           />
-        </div>
-
-        <div className="w-full space-y-4" data-testid="collection-content-container">
+      }>
           <CollectionTools address={address} />
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <div className="flex items-center justify-between gap-3">
@@ -503,8 +471,7 @@ export function CollectionRouteView({
             onCountChange={handleSweepCountChange}
             onSweep={handleSweep}
           />
-        </div>
-      </div>
+      </CollectionBrowseLayout>
     </section>
   );
 }

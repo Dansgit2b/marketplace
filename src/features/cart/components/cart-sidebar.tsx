@@ -1,4 +1,5 @@
 "use client";
+import { WalletConnectButton } from "@/components/layout/wallet-connect-button";
 import { formatCurrencyAmount } from "@/lib/marketplace/amount-display";
 import { ShoppingCart, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -12,28 +13,9 @@ import {
 import { useCartStore } from "../store/cart-store";
 import { useTrade } from "@/lib/marketplace/use-trade";
 import { marketplaceRequest } from "@/lib/marketplace/api-client";
-import {
-  parseOrderKey,
-  buildBuyMany,
-  buildApproval,
-} from "@/lib/marketplace/write-adapter";
+import { prepareCheckout, TradePreparationError } from "@biblio/marketplace";
 import { getTokenSymbol } from "@/lib/marketplace/token-display";
 import { TradeStatus } from "@/features/trading/trade-status";
-type Preflight = {
-  canSubmit: boolean;
-  reasons: string[];
-  total: string | null;
-  currency: string;
-  approvalAmount: string;
-  expiresAt: number;
-  rows: Array<{
-    key: string;
-    valid: boolean;
-    message?: string;
-    collection?: string;
-    tokenId?: string;
-  }>;
-};
 export function CartSidebar() {
   const {
     items,
@@ -52,49 +34,25 @@ export function CartSidebar() {
   async function checkout() {
     clearInlineErrors();
     const accepted = await trade.execute(async (marketplace) => {
-      const keys = items.map((item) =>
-        parseOrderKey(item.orderId, trade.config!.chain, marketplace),
-      );
-      const quote = await marketplaceRequest<Preflight>(
-        "/checkout/preflight",
-        {},
-        {
-          account: trade.address,
-          items: items.map((item, i) => ({
-            ...keys[i],
-            buyerDebit: item.price,
-          collection:item.collection,tokenId:item.tokenId,
-            currency: item.currency,
-          })),
-        },
-      );
-      for (const row of quote.rows)
-        if (!row.valid)
-          setItemError(row.key, row.message ?? "Listing unavailable.");
-      if (!quote.canSubmit)
-        throw new Error(
-          quote.reasons.join(", ") ||
-            "Some listings are no longer available. Remove or refresh them.",
-        );
-      if (
-        !quote.total ||
-        BigInt(quote.total) !== total ||
-        BigInt(quote.currency) !== BigInt(currency!)
-      )
-        throw new Error("Cart terms changed. Review the cart.");
-      const calls = [];
-      if (BigInt(quote.approvalAmount) > 0n)
-        calls.push(buildApproval(currency!, marketplace, quote.approvalAmount));
-      calls.push(
-        buildBuyMany(
-          marketplace,
-          keys,
-          currency!,
-          total.toString(),
-          quote.expiresAt,
-        ),
-      );
-      return calls;
+      try {
+        return (
+          await prepareCheckout(
+            marketplaceRequest,
+            {
+              marketplace,
+              chain: trade.config!.chain,
+              account: trade.address!,
+            },
+            items,
+          )
+        ).calls;
+      } catch (error) {
+        if (error instanceof TradePreparationError)
+          for (const row of error.rows)
+            if (!row.valid)
+              setItemError(row.key, row.message ?? "Listing unavailable.");
+        throw error;
+      }
     });
     if (accepted) clearCart();
   }
@@ -172,24 +130,30 @@ export function CartSidebar() {
               Includes marketplace fees and royalties. Network fees are
               separate.
             </p>
-            <Button
-              className="w-full"
-              disabled={
-                !items.length ||
-                trade.busy ||
-                !trade.address ||
-                !!trade.config?.demo
-              }
-              onClick={() => void checkout()}
-            >
-              {trade.busy
-                ? "Processing…"
-                : !trade.address
-                  ? "Connect wallet to checkout"
-                  : trade.config?.demo
-                    ? "Demo — trading disabled"
-                    : "Checkout"}
-            </Button>
+            {!trade.address ? (
+              <WalletConnectButton className="w-full" disabled={!items.length}>
+                Connect wallet to checkout
+              </WalletConnectButton>
+            ) : (
+              <Button
+                className="w-full"
+                disabled={
+                  !items.length ||
+                  trade.busy ||
+                  !trade.address ||
+                  !!trade.config?.demo
+                }
+                onClick={() => void checkout()}
+              >
+                {trade.busy
+                  ? "Processing…"
+                  : !trade.address
+                    ? "Connect wallet to checkout"
+                    : trade.config?.demo
+                      ? "Demo — trading disabled"
+                      : "Checkout"}
+              </Button>
+            )}
           </div>
         </SheetContent>
       </Sheet>

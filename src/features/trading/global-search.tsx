@@ -14,7 +14,7 @@ export function GlobalSearch({ query }: { query: string }) {
       ),
   });
   return (
-    <main className="space-y-6 p-4 sm:p-8">
+    <main className="market-page space-y-6">
       <h1 className="text-2xl">Search: {query}</h1>
       {result.isPending ? (
         <p>Searching…</p>

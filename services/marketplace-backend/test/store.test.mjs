@@ -175,3 +175,35 @@ test("floor history and daily sale aggregates roll back with their source blocks
   assert.equal(s.list("floor_current")[0].price, "100");
   s.close();
 });
+test("admin transfer clears the nomination and rewind restores it", () => {
+  const s = new Store(":memory:");
+  s.applyBlock(
+    block(1, "0x0", [
+      {
+        type: "initialized",
+        version: 1,
+        admin: address("2"),
+        feeBps: 200,
+        feeRecipient: address("4"),
+        paused: false,
+      },
+    ]),
+  );
+  s.applyBlock(
+    block(2, "0x65", [{ type: "admin_proposed", admin: address("3") }]),
+  );
+  s.applyBlock(
+    block(3, "0x66", [
+      {
+        type: "admin_transferred",
+        previous: address("2"),
+        admin: address("3"),
+      },
+    ]),
+  );
+  assert.equal(BigInt(s.get("config", "pending_admin").admin), 0n);
+  s.rewind(2);
+  assert.equal(s.get("config", "pending_admin").admin, address("3"));
+  assert.equal(s.get("config", "marketplace").admin, address("2"));
+  s.close();
+});

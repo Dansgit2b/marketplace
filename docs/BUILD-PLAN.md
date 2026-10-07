@@ -1,10 +1,10 @@
 # Starknet marketplace — full scope and build plan
 
-Version 1.0 · 6 October 2026
+Version 1.1 · 7 October 2026
 
 **Start here.** This is the consolidated project plan. It joins the contract, indexer, API, existing frontend, OpenSea product benchmark, operations and migration into one delivery sequence. It supersedes earlier launch-boundary statements where they differ; supporting documents provide implementation detail and historical evidence.
 
-Status: implementation in progress. Standalone Cairo settlement, the native Node indexer/API and retained-UI trading flows are implemented locally; integration and acceptance work is ongoing. No production deployment, independent audit, production backfill or staging soak is claimed. Track milestone completion here; supporting designs do not maintain competing status lists.
+Status: implementation in progress. **Deployment is blocked by remaining dependency advisories and the launch gates below.** Standalone Cairo settlement, the native Node indexer/API and retained-UI trading flows are implemented locally; integration and acceptance work is ongoing. No production deployment, independent audit, production backfill or staging soak is claimed. Track milestone completion here; supporting designs do not maintain competing status lists.
 
 ## 1. Product outcome
 
@@ -83,6 +83,52 @@ flowchart LR
 - **Frontend:** user intent, wallet signing, clear totals/errors and transaction/index progress. It cannot silently mutate order terms.
 
 Use a single backend codebase with separate writer, API and metadata processes. No required external queue or search service at launch. Preserve a clean product interface so later storage changes do not rewrite the UI. Cairo compiler/test tooling and proposed reviewed contract primitives are distinct from the zero-package Node runtime constraint.
+
+### Reusable marketplace packages — extraction map, 7 October 2026
+
+Status: implemented locally as private 0.1.0 workspace packages; not published. The existing Next.js app stays in place and consumes public package exports through retained view-model/wallet adapters. TanStack Query was explicitly selected by the user for fetching; Query Core is the SDK runtime dependency and React Query powers the optional React bindings. The backend package remains independently deployed.
+
+**Package structure**:
+
+- `packages/marketplace-sdk` → `@biblio/marketplace`: framework-independent TypeScript, ESM plus declarations, explicit exports and TanStack Query Core as its runtime dependency. Runs in modern browsers and Node without importing Next.js, React, Zustand, wallet connectors or SQLite. Owns typed reads, order preparation, amount/identity invariants, approval planning, transaction lifecycle and recovery. Ships versioned contract ABI assets and protocol compatibility checks. The ABI export remains generated from the Cairo contract rather than maintained by hand.
+- `packages/marketplace-react` → `@biblio/marketplace-react`: optional provider, query hooks, action hooks and reactive transaction state over the SDK. React and TanStack Query are peer dependencies. Wallet integration is an explicit adapter; the core SDK does not choose, connect or install a wallet. The main app supplies the reference Starknet React wallet adapter; wallet-specific dependencies stay outside the published SDK.
+- `services/marketplace-backend`: remains a separately operated indexer/API. A consumer supplies its own compatible endpoint or uses an explicitly configured shared deployment. Installing the SDK does not run an indexer or remove the need for indexed data. Operator credentials, journal/storage, scanners, metadata workers and server signature verification remain server-side.
+- Main app: imports the packages using `workspace:*`. Owns routes, shadcn/Tailwind rendering, brand assets, collection/game presentation, wallet chooser, URL state and cart drawer. Cart selection/validation and transaction rules come from the SDK; drawer visibility and messages remain presentation concerns. Storybook uses the same public package interfaces with fixture adapters.
+
+**Source-to-package map**:
+
+| Existing implementation | Destination / treatment |
+| --- | --- |
+| `src/lib/marketplace/api-client.ts`, domain types and API read logic | SDK typed client; inject endpoint, network, fetch and request policy. Replace app environment reads and fixed localhost paths. Keep legacy view-model conversions private to app migration. |
+| `write-adapter.ts`, amount/royalty/order identity helpers, ABI | SDK protocol internals and deliberately exported advanced call builders; exact bigint arithmetic and explicit currency metadata |
+| Checkout in `cart-sidebar.tsx`, creation/repricing in `order-composer.tsx`, acceptance in `accept-offer.tsx`, cancellation in `trader-dashboard.tsx` | SDK semantic trade preparation methods; remove duplicated business logic from views |
+| `use-trade.ts`, `pending-transaction.ts` | Framework-independent transaction coordinator with account, receipt, storage and clock adapters; React subscribes to it |
+| `react.tsx`, `hooks.ts`, query helpers | React package using SDK reads and instance-scoped query keys |
+| `use-wallet-session.ts` | SDK challenge/verification requests and injected signing; React binding. Server verification stays in backend. |
+| Cart store and listing utilities | Pure cart constraints/candidate selection in SDK; optional instance-scoped React state adapter; persistence supplied explicitly |
+| `seo-data.ts` | App-specific metadata construction using the SDK server client |
+| Realms images, game filters, wallet chooser, components and route shells | Remain app-owned; reusable branded UI is a separate future deliverable |
+
+**Public interface**:
+
+1. `createMarketplaceClient({ apiUrl, chain, chainId, expectedMarketplace, fetch?, queryClient?, headers?, credentials?, timeoutMs?, assetBaseUrl? })` creates an isolated client. Read-only use needs no wallet. Trading requires a pinned expected deployment and compatible API/contract versions. Currency metadata, cache identity and pending records are scoped to the client/deployment; no shared mutable currency maps, global transaction store or implicit browser storage.
+2. Typed read groups cover collections/tokens/traits, listings/orders/offers, search, account holdings/orders/activity, statistics/best bid, configuration/status and transaction reflection. Expose cursor pagination, query cancellation and structured errors. Do not silently fetch all pages, round chain values or convert failures into empty results.
+3. `trades.prepareListing`, `prepareTokenOffer`, `prepareCollectionOffer`, `prepareBuy`, `prepareAcceptOffer`, `prepareCancel` and `prepareReprice` accept domain intent and account identity. Bulk input reuses these methods and preserves current limits. Preparation returns reviewable terms, approval requirements, calls, per-item failures, freshness and account/deployment binding. Distinguish exact settlement quotes from estimates/caps. Preflight remains advisory.
+4. `trades.submit(prepared, accountAdapter)` validates binding, expiry, current account/network and reviewed payment/proceeds bounds before requesting a signature. A refresh that changes reviewed terms requires a new review; never silently expand an approval or payment. Signing is an explicit action, never an effect of mounting a hook or fetching data. Low-level calldata builders remain an advanced escape hatch with clearly documented caller responsibilities.
+5. Submission returns a transaction handle/hash separately from receipt acceptance and index reflection. `transactions.watch` / `resume` expose typed progress and recover retained records without resubmission. Scope concurrency by account and deployment; coordinate consumers of the same client. Document that separate tabs/processes require a shared coordination adapter if cross-context locking is desired. Unknown submission outcomes must not be retried automatically.
+6. Authentication supports public reads without a session and explicit wallet verification for inbox/report actions. Same-origin proxy is the default app integration. Cross-origin integration requires a deliberate backend origin/cookie policy or a compatible BFF; do not assume the current session cookies work on arbitrary domains. Server clients use per-request credentials, never a global user session. Keep operator operations out of the browser package.
+
+**Migration sequence**:
+
+1. Inventory every marketplace read/write call site and freeze existing behaviour with public-interface tests. Record ABI/API versions and exported types; do not expose legacy Dojo/project configuration as new SDK concepts.
+2. Create workspace packages, build/type/export configuration and packed-artifact checks. Start private; publication is a separate release decision.
+3. Extract protocol types, exact amounts, identity, ABI and the injected HTTP client. Migrate app reads and SSR reads first; app wrappers may temporarily preserve view models but must delegate to the SDK.
+4. Extract semantic order preparation and the transaction coordinator. Migrate listing, offers, acceptance, buy/cart, cancellation, bulk repricing and recovery one workflow at a time. Delete the superseded app business logic after each migration.
+5. Add the React provider/hooks and wallet adapter. Migrate all app call sites and Storybook fixtures. Any changed UI follows the mandatory Storybook-first responsive workflow.
+6. Add a minimal non-React consumer and a minimal React consumer that install packed packages without `@/` aliases or repository source imports. Prove reads and a devnet trading journey from both.
+7. Run app regression/Storybook tests, native API compatibility tests and devnet contract/indexer reconciliation through the public SDK. Produce migration and integration documentation. Only then call the main app an SDK consumer and consider publication.
+
+**Extraction acceptance gates**: package imports have no app/env/DOM side effects; two clients with different deployments/currencies are isolated; account/network changes invalidate prepared intent; stale/rejected/reverted/unknown transactions cannot trigger automatic duplicate submissions; 25-item atomic single-currency checkout and cancellation during pause remain intact; packed artifacts contain declarations and ABI assets; browser and Node imports work independently; all app reads and business-level writes use public package exports; no private deep imports or parallel implementations remain. Retain existing coverage thresholds and test through the interface third-party apps actually consume. Package extraction does not satisfy the outstanding real-wallet, historical-indexing or production launch gates below.
 
 ## 5. Contract design to freeze at M0
 
@@ -163,38 +209,84 @@ Roles below are responsibilities, not a claim that people have been assigned.
 
 Critical path: M0 → M1 → M2 → validated event/API integration → completed product and contract review → M8. M3 and M4 can be scheduled concurrently after M2/M1 respectively; frontend can use fixed fixtures before backend completion. Independent review can start after the contract interface and implementation stabilize, but any material later changes need review coverage.
 
-### First implementation batch
+### Current implementation status — 7 October 2026
 
-1. Create `contracts/marketplace` with pinned toolchain and native tests; establish approved dependency policy.
-2. Commit machine-readable ABI/event fixtures and independent payment examples before UI integration.
-3. Implement order creation/cancellation and direct getters test-first.
-4. Implement one listing fill, then token/collection-offer acceptance with explicit payment bounds.
-5. Add a minimal Node scanner and SQLite journal that decodes those events and survives duplicate input/restart.
-6. Wire one existing token page to the new devnet flow and prove indexed convergence.
-
-Do not begin by porting the old Torii infrastructure or implementing every API endpoint before the contract/event slice works.
-
-### Implementation evidence — 6 October 2026
-
-| Milestone | Current evidence | Remaining gate |
+| Area | Implemented locally | Remaining launch evidence |
 | --- | --- | --- |
-| M0 | Confirmed pricing/royalty/admin defaults; version-1 ABI and reproducible class manifest checked in | Actual production fee/recipient/admin and final approved registry |
-| M1 | Standalone Cairo implementation; 14 native tests including 256 accounting fuzz cases, authorization, royalty caps, pause/cancel, malicious reentry and late-cart rollback | Independent review and real launch-asset compatibility |
-| M2 | Signed-account devnet listing/cart, token offer, collection offer and cancellation; native event decoder/index replay; direct preflight, metadata and wallet-signature verification | Supported browser-wallet rehearsal |
-| M3 | Scanner, raw journal, per-source checkpoints, rewind, bounded metadata queue, filters/search/holdings/cursors; receipt-format and source-onboarding regressions | Full launch-registry historical backfill, fixed-checkpoint external reconciliation, dynamic game eligibility policies |
-| M4 | 25-item account transaction succeeds on devnet; same-size repeated-fill comparison recorded | Mainnet-fork resource checks against actual launch assets |
-| M5 | Retained UI wired to owned reads/writes; seller dashboard, offers, bulk actions, sweep, cart, transaction recovery, exact currency decimals; browser cart/portfolio smoke flows pass | Real wallet failure/recovery journeys on Sepolia |
-| M6 | Statistics/floor history, bounded executable-bid evaluation, verified sessions, inbox, reports, moderation and operator refresh | Named moderation/operator policy and live operational rehearsal |
-| M7 | Native backup/restore test, runtime dependency guard, pinned toolchain, CI jobs, Docker topology and runbook | Independent audit, representative HTTP/RPC load, production-size restore/failover, supported frontend wallet-library upgrade |
-| M8 | No production deployment or legacy-order recreation performed | Sepolia rehearsal, migration/cancel decision, deployment inputs and seven-day soak |
+| Cairo | Standalone non-upgradeable v1, 17 entrypoints, listing/token/collection offers, atomic cart and limited administration | Independent audit; actual launch-asset compatibility and fork/resource checks |
+| Indexer/API | Native Node/SQLite journal, replay, per-source progress, metadata, preflight, sessions, reports and notifications | Historical backfill, fixed-checkpoint external reconciliation, dynamic game policies, production load/restore/failover |
+| SDK | Private workspace packages, TanStack fetching, full v1 ABI coverage, direct reads, governance and recovery | Deployment integration; packages are not published |
+| UI | Owned reads/trading, wallet entry points, full-width discovery, consistent spacing, reusable Storybook components | Real supported-wallet trading/recovery; on-chain admin console is not implemented |
+| Local verification | Unit, Storybook/a11y, SDK packed consumers, backend, Cairo and devnet replay suites exist; CI runs required checks | Green remote CI, Sepolia rehearsal, migration decision and seven-day soak |
+| Deployment | Backend container/Compose and runbook; release-tree guard and local verification command | Final addresses/class/start block, fees/admin, reviewed registry, host/domain/RPC, operator and monitoring ownership |
 
-Measured local evidence: signed devnet rehearsal indexed **55 orders and 54 NFTs**, then rewound/replayed order, ownership, floor and daily-stat projections identically. A 25-item native cart used **100,088,320 L2 gas units** versus **108,655,360** for 25 single fills in one account multicall (about 7.9% lower in these fixtures); both used 5,376 L1 data-gas units. These receipts include account execution, use test assets and are not a mainnet fee estimate.
+Run `pnpm release:verify` for reproducible local checks. The latest preparation
+results are recorded below; earlier counts and individual implementation reports
+are [historical evidence](history/IMPLEMENTATION-EVIDENCE-2026-10-07.md), not current
+release approval. Demo screenshots and local fixtures do not close launch gates.
 
-A synthetic in-memory catalog with 10,000 NFTs and 2,000 listings initially exposed a 32.6-second query. Composite indexes reduced mixed-query p95 to **38.3 ms over 100 queries** on this machine. This is SQL timing, not the planned 50-requests/second HTTP or real-RPC capacity test. Scripts reproduce the measurements; local evidence is in ignored `.context/`.
+### Release preparation — 7 October 2026
 
-Current validation: **500 frontend tests**, **32 native backend tests** (also passing from a temporary tree without `node_modules`), **14 Cairo tests** including 256 fuzz cases, and **4 browser smoke tests** pass. Frontend coverage is 70.6% statements/lines, above the unchanged 70% gate. Lint, strict typecheck, frozen-lockfile installation and production Next.js build pass. The optional screenshot-only test is skipped when no routes are requested; remote CI has not been run.
+- Local settings remain on disk but `.env.local` is removed from source control;
+  nested workspace dependencies, secrets, data and build artifacts are excluded
+  from Git/Docker release contexts. CI includes the release-tree guard.
+- `pnpm release:verify` pins local fixture settings and runs reproducible SDK,
+  backend, Cairo, coverage, build and browser gates; actual deployments require
+  a separate build with reviewed environment inputs. `pnpm release:audit` is a
+  separate registry/network gate and currently fails on 19 high findings.
+- Next.js/ESLint config updated to 16.3.6: production audit critical findings
+  reduced from 2 to 0. Remaining wallet/transitive findings are detailed in
+  [operations](OPERATIONS.md#dependency-audit--7-october-2026).
+- Superseded local output is archived under `.context/archive`; dated progress
+  reports are in `docs/history`. The unused Arcade-era starter shell was removed.
+- Final local verification on Next.js 16.3.6: 565 unit/Storybook tests, 40 SDK
+  interface tests, 34 backend tests, 14 Cairo tests (including 256 fuzz cases),
+  non-fixture Cairo build, packed consumers, typecheck/lint, Storybook/Next builds
+  and four browser smoke tests pass. The optional screenshot test was skipped.
+  Coverage remains above unchanged 70% gates (81.97% statements, 70.67% branches,
+  81.39% functions, 82.88% lines). Added release-guard tests also pass. Frozen
+  lockfile validation and local documentation link checks pass.
+- Compose template validates; container image build/boot remains unverified
+  because the local Docker daemon did not respond. Production deployment inputs,
+  remote CI, independent review, supported-wallet/fork checks, backfill, recovery,
+  Sepolia rehearsal and soak remain open. No deployment or new commit was made.
 
-Production deployment is intentionally unconfigured. The remaining gates above are not completed by fixture tests, code review by the implementer, or a successful frontend build.
+### Adversarial contract review — 7 October 2026
+
+[Review report](CONTRACT-ADVERSARIAL-REVIEW-2026-10-07.md): no high-confidence
+settlement vulnerability confirmed in this pass. Added 16 tests and test-only
+receiver/payment callback probes. All 30 Cairo tests pass, including 512 fuzz
+cases and reentry attempts against all 14 mutating entrypoints. The 40 SDK tests
+pass. Production source, ABI and both class hashes are unchanged. Actual asset
+compatibility, game eligibility, supported-wallet/fork testing and independent
+audit remain launch gates; this local review does not close them.
+
+### Mainnet deployment tooling — 7 October 2026
+
+Implemented the [staged deployment workflow](MAINNET-DEPLOYMENT.md): read-only
+identity probing, artifact/source/ABI verification, deterministic UDC plans,
+bounded V3 declaration/deployment, final administrator in the constructor,
+atomic paused configuration, multisig call export, canonical receipt and exact
+Cairo 1 calldata verification, durable submission journals, explicit recovery,
+current-policy replay, and indexer/frontend environment/registry exports.
+Activation evidence is collected later and bound to the original plan digest.
+Mainnet sends require reviewed evidence references, the exact plan digest, a
+clean matching commit, correct signer/network/classes and bounded resource fees.
+References record operator approval; scripts do not independently certify audits.
+
+Validation: 22 deployment-specific tests and all 517 unit tests pass, as do lint,
+typecheck, frozen-lockfile and release-tree checks. A signed localhost devnet
+0.10.0 rehearsal used separate deployer/admin accounts, declared/deployed the real
+marketplace, configured it paused, exported verified handoff files, recorded an
+externally signed activation with later evidence, verified canonical receipts and
+policy state, and confirmed that repeating a completed deployment did not consume
+another nonce. The RPC needs historical state; the rehearsal uses full archiving.
+
+No public Sepolia or mainnet transactions were sent. Production inputs remain
+blank in the examples. Mainnet audit/dependency/asset/wallet/operational gates are
+unchanged. The tooling supports standard Cairo 1 account multicalls; nonstandard
+multisig execution wrappers need separate integration rather than relaxed receipt
+verification. Local rehearsal evidence lives under `.context/deployment-rehearsals`.
 
 ## 9. Test and optimization matrix
 

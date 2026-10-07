@@ -506,7 +506,7 @@ describe("collection token grid", () => {
     const user = userEvent.setup();
     render(<CollectionTokenGrid address="0xabc" projectId="project-a" />);
 
-    await user.click(screen.getByRole("button", { name: /buy now/i }));
+    await user.click(screen.getByRole("button", { name: /add to cart/i }));
 
     expect(mockCartAddItem).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -551,7 +551,7 @@ describe("collection token grid", () => {
     render(<CollectionTokenGrid address="0xabc" projectId="project-a" />);
 
     expect(await screen.findByText("120")).toBeVisible();
-    await user.click(screen.getByRole("button", { name: /buy now/i }));
+    await user.click(screen.getByRole("button", { name: /add to cart/i }));
 
     expect(mockCartAddItem).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -609,7 +609,7 @@ describe("collection token grid", () => {
     const user = userEvent.setup();
     render(<CollectionTokenGrid address="0xabc" projectId="project-a" />);
 
-    await user.click(screen.getByRole("button", { name: /buy now/i }));
+    await user.click(screen.getByRole("button", { name: /add to cart/i }));
 
     expect(mockCartAddItem).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -652,13 +652,13 @@ describe("collection token grid", () => {
     const user = userEvent.setup();
     render(<CollectionTokenGrid address="0xabc" projectId="project-a" />);
 
-    await user.click(screen.getByRole("button", { name: /buy now/i }));
+    await user.click(screen.getByRole("button", { name: /add to cart/i }));
 
     expect(mockCartSetOpen).toHaveBeenCalledWith(true);
     expect(screen.queryByRole("button", { name: /added/i })).toBeNull();
   });
 
-  it("clicking_card_body_adds_listing_without_opening_cart", async () => {
+  it("card_body_links_to_details_without_changing_cart", async () => {
     mockUseCollectionTokensQuery.mockReturnValue({
       data: {
         page: {
@@ -685,19 +685,11 @@ describe("collection token grid", () => {
       ]),
     );
 
-    const user = userEvent.setup();
     render(<CollectionTokenGrid address="0xabc" projectId="project-a" />);
 
-    await user.click(await screen.findByRole("article", { name: "token-1" }));
-
-    expect(mockCartAddItem).toHaveBeenCalledWith(
-      expect.objectContaining({
-        orderId: "22",
-        collection: "0xabc",
-        tokenId: "1",
-        price: "120",
-      }),
-    );
+    const link = await screen.findByRole("link", { name: "token-1" });
+    expect(link).toHaveAttribute("href", "/collections/0xabc/1");
+    expect(mockCartAddItem).not.toHaveBeenCalled();
     expect(mockCartSetOpen).not.toHaveBeenCalled();
   });
 
@@ -726,9 +718,7 @@ describe("collection token grid", () => {
     expect(screen.queryByRole("button", { name: /standard/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /comfort/i })).toBeNull();
     expect(screen.getByTestId("collection-token-grid-cards")).toHaveClass(
-      "grid-cols-2",
-      "sm:grid-cols-3",
-      "lg:grid-cols-4",
+      "market-asset-grid",
     );
   });
 
@@ -754,11 +744,11 @@ describe("collection token grid", () => {
 
     const grid = screen.getByTestId("collection-token-grid-cards");
     await user.click(screen.getByRole("button", { name: /compact/i }));
-    expect(grid).toHaveClass("grid-cols-2", "sm:grid-cols-3", "lg:grid-cols-4");
+    expect(grid).toHaveClass("market-asset-grid");
 
     await user.click(screen.getByRole("button", { name: /dense/i }));
     const denseGrid = screen.getByTestId("collection-token-grid-cards");
-    expect(denseGrid).toHaveClass("grid-cols-2", "sm:grid-cols-3", "lg:grid-cols-6");
+    expect(denseGrid).toHaveClass("market-asset-grid-dense");
   });
 
   it("list_view_renders_tokens_in_a_table_layout", async () => {

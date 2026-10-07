@@ -39,7 +39,7 @@ export function PortfolioView({ initialAddress = "" }: PortfolioViewProps) {
 
   return (
     <main
-      className="mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-7xl flex-col gap-5 px-4 py-6 sm:px-6 lg:px-8"
+      className="market-page mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-7xl flex-col gap-4"
       data-testid="portfolio-view"
     >
       <h1 className="realm-title text-3xl">Portfolio</h1>

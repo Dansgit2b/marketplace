@@ -1,7 +1,7 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
-/node_modules
+node_modules/
 /.pnp
 .pnp.*
 .yarn/*
@@ -32,7 +32,6 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
-!.env.local
 
 # vercel
 .vercel
@@ -54,6 +53,9 @@ certificates
 *.sqlite
 *.sqlite-wal
 *.sqlite-shm
+*.sqlite.app
+*.sqlite.app-wal
+*.sqlite.app-shm
 
 /output/
 /.playwright-cli/
@@ -65,3 +67,10 @@ certificates
 /playwright-report/
 /coverage/
 /artifacts/
+/storybook-static/
+
+# Built workspace packages
+packages/*/dist/
+*.tgz
+
+!.env.deployment.example

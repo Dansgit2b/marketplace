@@ -1,3 +1,4 @@
+import {runSdkDevnetJourney} from "../packages/devnet-journey.mjs";
 // Development tooling only. The production backend has no Starknet.js dependency.
 import { createRequire } from "node:module";
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
@@ -330,6 +331,7 @@ const repeatedFills = await execute(
   ),
 );
 await scanOnce(store, rpc, config, { window: 1000 });
+const sdkJourney = await runSdkDevnetJourney({store,rpc,provider,config,admin,seller,buyer,nft,currency,execute,call});
 const chainProjection = () =>
   JSON.stringify({
     orders: store.list("order"),
@@ -338,6 +340,8 @@ const chainProjection = () =>
       .map((t) => ({ id: t.id, owner: t.owner, updatedAt: t.updatedAt })),
     stats: store.list("stats_day"),
     floors: store.list("floor_history"),
+    configuration:store.list("config"),
+    policies:store.list("policy"),
   });
 const finalProjection = chainProjection();
 store.rewind(-1);
@@ -352,6 +356,7 @@ const report = {
   cartResources: cart.execution_resources,
   maximumCartResources: maximumCart.execution_resources,
   repeatedFillsResources: repeatedFills.execution_resources,
+  sdkJourney,
   replayIdentical: true,
   livePreflight: true,
   walletSignatureVerified: true,

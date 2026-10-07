@@ -1,9 +1,10 @@
+import {canAddCartItem,compareAmounts as compareBigIntStrings} from "@biblio/marketplace";
+export {CART_MAX_ITEMS} from "@biblio/marketplace";
 import { createStore } from "zustand/vanilla";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
 export const CART_STORAGE_KEY = "marketplace-cart-v2";
-export const CART_MAX_ITEMS = 25;
 
 export type CartItem = {
   orderId: string;
@@ -38,50 +39,6 @@ type CartStoreState = {
   clearActionError: () => void;
 };
 
-function compareBigIntStrings(left: string, right: string) {
-  try {
-    const leftValue = BigInt(left);
-    const rightValue = BigInt(right);
-    if (leftValue === rightValue) {
-      return 0;
-    }
-
-    return leftValue < rightValue ? -1 : 1;
-  } catch {
-    return left.localeCompare(right);
-  }
-}
-
-function getCurrentCurrency(items: CartItem[]) {
-  return items[0]?.currency ?? null;
-}
-
-function applyAddItem(
-  state: Pick<CartStoreState, "items">,
-  item: CartItem,
-): CartActionResult {
-  if (state.items.some((entry) => entry.orderId === item.orderId)) {
-    return { ok: false, error: "Already in cart." };
-  }
-
-  if (state.items.length >= CART_MAX_ITEMS) {
-    return {
-      ok: false,
-      error: `Cart maximum ${CART_MAX_ITEMS} items reached.`,
-    };
-  }
-
-  const currency = getCurrentCurrency(state.items);
-  if (currency && currency !== item.currency) {
-    return {
-      ok: false,
-      error: "Cart only supports a single currency.",
-    };
-  }
-
-  return { ok: true };
-}
-
 function legacyCartNotice() {
   if(typeof localStorage==='undefined')return null;
   try {return localStorage.getItem('marketplace-cart-v1')&&!localStorage.getItem(CART_STORAGE_KEY)?'Items from the previous marketplace were cleared. Add current listings to use the new contract.':null;}catch{return null;}
@@ -94,7 +51,7 @@ const createState = persist<CartStoreState>(
     inlineErrors: {},
     lastActionError: legacyCartNotice(),
     addItem: (item) => {
-      const result = applyAddItem(get(), item);
+      const result = canAddCartItem(get().items, item);
       if (!result.ok) {
         set({ lastActionError: result.error ?? "Failed to add item." });
         return result;

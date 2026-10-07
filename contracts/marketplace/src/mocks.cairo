@@ -17,11 +17,15 @@ pub mod MockCurrency {
         StoragePointerWriteAccess,
     };
     use starknet::{ContractAddress, get_caller_address};
+    use crate::{IMarketplaceDispatcher, IMarketplaceDispatcherTrait};
     #[storage]
     struct Storage {
         balances: Map<ContractAddress, u256>,
         allowances: Map<(ContractAddress, ContractAddress), u256>,
         fail: bool,
+        reentry_market: ContractAddress,
+        reentry_nonce: u64,
+        false_after_recipient: ContractAddress,
     }
     #[abi(embed_v0)]
     impl Currency of crate::ICurrency<ContractState> {
@@ -41,7 +45,11 @@ pub mod MockCurrency {
             self.allowances.write(key, allowance - amount);
             self.balances.write(sender, self.balances.read(sender) - amount);
             self.balances.write(recipient, self.balances.read(recipient) + amount);
-            true
+            if self.reentry_market.read() != crate::zero() {
+                IMarketplaceDispatcher { contract_address: self.reentry_market.read() }
+                    .cancel_order(self.reentry_nonce.read());
+            }
+            recipient != self.false_after_recipient.read()
         }
         fn balance_of(self: @ContractState, account: ContractAddress) -> u256 {
             self.balances.read(account)
@@ -64,6 +72,15 @@ pub mod MockCurrency {
     fn set_failure(ref self: ContractState, fail: bool) {
         self.fail.write(fail);
     }
+    #[external(v0)]
+    fn set_false_after_recipient(ref self: ContractState, recipient: ContractAddress) {
+        self.false_after_recipient.write(recipient);
+    }
+    #[external(v0)]
+    fn set_payment_reentry(ref self: ContractState, market: ContractAddress, nonce: u64) {
+        self.reentry_market.write(market);
+        self.reentry_nonce.write(nonce);
+    }
 }
 #[starknet::contract]
 pub mod MockNft {
@@ -73,6 +90,7 @@ pub mod MockNft {
     };
     use starknet::{ContractAddress, get_caller_address};
     use crate::{IMarketplaceDispatcher, IMarketplaceDispatcherTrait};
+    use super::{IReceiverDispatcher, IReceiverDispatcherTrait};
     #[storage]
     struct Storage {
         owners: Map<u256, ContractAddress>,
@@ -84,6 +102,7 @@ pub mod MockNft {
         fail_token_enabled: bool,
         reentry_market: ContractAddress,
         reentry_currency: ContractAddress,
+        receiver_checks: bool,
     }
     #[event]
     #[derive(Drop, starknet::Event)]
@@ -142,6 +161,11 @@ pub mod MockNft {
             self.owners.write(token_id, to);
             self.approvals.write(token_id, crate::zero());
             self.emit(Transfer { from, to, token_id });
+            if self.receiver_checks.read() {
+                let response = IReceiverDispatcher { contract_address: to }
+                    .on_erc721_received(get_caller_address(), from, token_id, data);
+                assert(response == super::RECEIVER_ID, 'BAD_RECEIVER');
+            }
             if self.reentry_market.read() != crate::zero() {
                 IMarketplaceDispatcher { contract_address: self.reentry_market.read() }
                     .create_collection_offer(
@@ -198,5 +222,84 @@ pub mod MockNft {
     #[external(v0)]
     fn set_failure(ref self: ContractState, fail: bool) {
         self.fail.write(fail);
+    }
+    #[external(v0)]
+    fn set_receiver_checks(ref self: ContractState, enabled: bool) {
+        self.receiver_checks.write(enabled);
+    }
+}
+
+// Receiver callback fixture: standard callback ABI, not a complete production ERC721/account.
+pub const RECEIVER_ID: felt252 = 0x3a0dff5f70d80458ad14ae37bb182a728e3c8cdda0402a5daa86620bdf910bc;
+#[starknet::interface]
+pub trait IReceiver<T> {
+    fn on_erc721_received(
+        ref self: T,
+        operator: ContractAddress,
+        from: ContractAddress,
+        token_id: u256,
+        data: Span<felt252>,
+    ) -> felt252;
+}
+#[starknet::contract]
+pub mod ReceiverProbe {
+    use starknet::storage::{
+        Map, StorageMapReadAccess, StorageMapWriteAccess, StoragePointerReadAccess,
+        StoragePointerWriteAccess,
+    };
+    use starknet::syscalls::call_contract_syscall;
+    use starknet::{ContractAddress, SyscallResultTrait};
+    #[storage]
+    struct Storage {
+        target: ContractAddress,
+        selector: felt252,
+        data: Map<u32, felt252>,
+        len: u32,
+        reject: bool,
+    }
+    #[external(v0)]
+    fn configure(
+        ref self: ContractState,
+        target: ContractAddress,
+        selector: felt252,
+        data: Span<felt252>,
+        reject: bool,
+    ) {
+        self.target.write(target);
+        self.selector.write(selector);
+        self.len.write(data.len());
+        self.reject.write(reject);
+        for i in 0..data.len() {
+            self.data.write(i, *data.at(i));
+        }
+    }
+    #[external(v0)]
+    fn run(
+        ref self: ContractState, target: ContractAddress, selector: felt252, data: Span<felt252>,
+    ) {
+        call_contract_syscall(target, selector, data).unwrap_syscall();
+    }
+    #[abi(embed_v0)]
+    impl Receiver of super::IReceiver<ContractState> {
+        fn on_erc721_received(
+            ref self: ContractState,
+            operator: ContractAddress,
+            from: ContractAddress,
+            token_id: u256,
+            data: Span<felt252>,
+        ) -> felt252 {
+            if self.reject.read() {
+                return 0;
+            }
+            if self.selector.read() != 0 {
+                let mut payload = array![];
+                for i in 0..self.len.read() {
+                    payload.append(self.data.read(i));
+                }
+                call_contract_syscall(self.target.read(), self.selector.read(), payload.span())
+                    .unwrap_syscall();
+            }
+            super::RECEIVER_ID
+        }
     }
 }

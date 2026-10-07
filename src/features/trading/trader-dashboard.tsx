@@ -1,4 +1,5 @@
 "use client";
+import { WalletConnectButton } from "@/components/layout/wallet-connect-button";
 import { formatCurrencyAmount } from "@/lib/marketplace/amount-display";
 import { useState } from "react";
 import Link from "next/link";
@@ -6,7 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useTrade } from "@/lib/marketplace/use-trade";
 import { marketplaceRequest, tokenFromApi } from "@/lib/marketplace/api-client";
 import type { ApiOrder, ApiPage, ApiToken } from "@/lib/marketplace/types";
-import { parseOrderKey, buildCancel } from "@/lib/marketplace/write-adapter";
+import { prepareCancellation } from "@biblio/marketplace";
 import { MarketplaceTokenCard } from "@/components/marketplace/token-card";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -154,19 +155,13 @@ export function TraderDashboard() {
   }
   async function cancel() {
     await trade.execute(
-      (m) =>
-        selected.map((id) => {
-          const key = parseOrderKey(id, trade.config!.chain, m);
-          if (BigInt(key.maker) !== BigInt(trade.address!))
-            throw new Error("Only your orders can be cancelled.");
-          return buildCancel(m, key.nonce);
-        }),
+      (m) => prepareCancellation({marketplace:m,chain:trade.config!.chain,account:trade.address!},selected),
       "cancel",
     );
     setSelected([]);
   }
   return (
-    <main className="mx-auto max-w-7xl space-y-5 p-4 sm:p-8">
+    <main className="market-page mx-auto max-w-7xl space-y-4">
       <div>
         <h1 className="realm-title text-3xl">Trading dashboard</h1>
         <p className="mt-2 text-sm text-muted-foreground">
@@ -176,7 +171,7 @@ export function TraderDashboard() {
       {!trade.address ? (
         <Card>
           <CardContent className="p-6 text-muted-foreground">
-            Connect your wallet to manage trading.
+            <p className="mb-4">Connect your wallet to manage trading.</p><WalletConnectButton />
           </CardContent>
         </Card>
       ) : (

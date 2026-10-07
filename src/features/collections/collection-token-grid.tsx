@@ -2,6 +2,7 @@
 import {formatCurrencyAmount} from "@/lib/marketplace/amount-display";
 
 import Link from "next/link";
+import { AssetGrid } from "@/components/marketplace/asset-grid";
 import { useMarketCurrency } from "@/lib/marketplace/currency-store";
 import { decodeRangeFilterValue } from "@/lib/marketplace/traits";
 import { useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from "react";
@@ -65,10 +66,6 @@ type CollectionTokenGridProps = {
 type GridDensityMode = "compact" | "dense";
 type GridLayoutMode = GridDensityMode | "list";
 
-const GRID_CLASSES_BY_DENSITY: Record<GridDensityMode, string> = {
-  compact: "grid-cols-2 sm:grid-cols-3 lg:grid-cols-4",
-  dense: "grid-cols-2 sm:grid-cols-3 lg:grid-cols-6",
-};
 const EMPTY_ACTIVE_FILTERS: ActiveFilters = {};
 
 function dedupeTokens(tokens: NormalizedToken[]) {
@@ -323,7 +320,7 @@ export function CollectionTokenGrid({
     [displayTokens],
   );
   const isListMode = gridMode === "list";
-  const gridClasses = GRID_CLASSES_BY_DENSITY[isListMode ? "compact" : gridMode];
+  const density = isListMode ? "compact" : gridMode;
 
   // Grid entrance stagger animation — re-triggers on filter/sort changes via key
   const gridAnimationKey = `${activeFiltersKey}-${sortMode}-${gridMode}`;
@@ -373,16 +370,16 @@ export function CollectionTokenGrid({
       </div>
 
       {tokenQuery.isLoading && pagination.tokens.length === 0 ? (
-        <div className={cn("grid gap-3", gridClasses)}>
+        <AssetGrid density={density}>
           {Array.from({ length: 6 }).map((_, index) => (
             <Card key={index}>
               <CardContent className="space-y-2 p-3">
-                <Skeleton className="h-40 w-full" data-testid="token-skeleton" />
+                <Skeleton className="aspect-[4/5] w-full" data-testid="token-skeleton" />
                 <Skeleton className="h-4 w-2/3" />
               </CardContent>
             </Card>
           ))}
-        </div>
+        </AssetGrid>
       ) : null}
 
       {tokenQuery.isError ? (
@@ -394,10 +391,10 @@ export function CollectionTokenGrid({
       ) : null}
 
       {!tokenQuery.isLoading && !isListMode ? (
-        <div
+        <AssetGrid
           ref={gridRef}
           key={gridAnimationKey}
-          className={cn("grid gap-3", gridClasses)}
+          density={density}
           data-testid="collection-token-grid-cards"
         >
           {sortedTokens.map((token) => {
@@ -427,7 +424,7 @@ export function CollectionTokenGrid({
                   )}
                 >
                   <MarketplaceTokenCard
-                    buyNowLabel={isAdded ? "Added" : "Buy Now"}
+                    buyNowLabel={isAdded ? "Added" : "Add to cart"}
                     cardContentAriaLabel={`token-${tokenKey}`}
                     cardContentRole="article"
                     currency={cheapestListing?.currency ?? null}
@@ -447,13 +444,6 @@ export function CollectionTokenGrid({
                         }
                         : undefined
                     }
-                    onSelect={
-                      cardItem && !isSweepPreview
-                        ? () => {
-                          addListingToCart(cardItem, { openCart: false });
-                        }
-                        : undefined
-                    }
                     price={price}
                     showActions
                     token={token}
@@ -462,7 +452,7 @@ export function CollectionTokenGrid({
               </div>
             );
           })}
-        </div>
+        </AssetGrid>
       ) : null}
 
       {!tokenQuery.isLoading && isListMode ? (
