@@ -212,8 +212,12 @@ Direct API connections are limited by their normalized TCP peer IP. Forwarded
 headers are ignored by default, including loopback callers. For the selected
 Railway topology, the checked-in IaC sets
 `MARKETPLACE_TRUSTED_PROXY_HOSTS=web.railway.internal`; the API resolves that exact
-service hostname and accepts only its relayed `X-Real-IP`. Railway's public edge
-sets this header and the Next.js rewrite carries it to the private backend.
+service hostname and accepts only its relayed `X-Real-IP`. The configured Railway
+edge rule rejects caller-supplied `X-Real-IP` before ingress supplies the genuine
+identity and the Next.js rewrite carries it to the private backend. The live
+8 October test showed that default ingress preserved forged values: do not rely
+on an assumed overwrite guarantee. Apply `pnpm railway:edge -- ENVIRONMENT` when
+creating either environment; its policy is `infra/railway/edge-rules.json`.
 `X-Forwarded-For` is never used to establish identity. The backend must have no
 public domain/TCP proxy, and web public traffic must enter through Railway HTTP
 ingress. See the [Railway client-IP contract](https://station.railway.com/questions/need-authoritative-railway-client-ip-p-b7a7b4bd)
@@ -226,7 +230,11 @@ client-supplied forwarding headers; do not trust it without that ingress boundar
 DNS results are cached for 30 seconds, and lookup failure grants no new header
 trust. Malformed or multi-value IP headers fall back to the TCP peer. Each visitor
 retains the 300-request/minute quota; `/health/live` is exempt from visitor quotas.
-Staging still needs a live ingress anti-spoofing and multi-visitor check.
+Live staging checks passed after installing the rule: 300 requests from one
+simulated visitor succeeded, its next request returned 429, and another visitor
+still received 200. Through public ingress, varying `X-Forwarded-For` did not evade
+the quota, while supplying `X-Real-IP` returned 403. Repeat this check after
+changing ingress or proxy configuration.
 
 ## Historical source boundary changes
 

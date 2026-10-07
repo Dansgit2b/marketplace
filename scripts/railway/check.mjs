@@ -13,6 +13,7 @@ for (const environment of ['staging', 'production']) {
   assert.deepEqual(web.variables.NEXT_PUBLIC_MARKETPLACE_CHAIN_ID, backend.variables.MARKETPLACE_CHAIN);
   assert.equal(resources.filter(r => r.type === 'volume').length, 1);
   assert.equal(backend.volumeAttachments['marketplace-data'].mountPath, '/data');
+  assert.deepEqual(backend.volumeAttachments['marketplace-data'].backupSchedules, ['DAILY', 'WEEKLY']);
   assert.equal(backend.deploy.requiredMountPath, '/data');
   assert.equal(backend.deploy.overlapSeconds, 0);
   assert.equal(Object.values(backend.deploy.multiRegionConfig).reduce((n, r) => n + r.numReplicas, 0), 1);
@@ -28,3 +29,5 @@ for (const environment of ['staging', 'production']) {
 }
 assert.throws(() => config(createRailwayContext({ environment: 'preview' }), project), /explicitly/);
 assert.throws(() => config(createRailwayContext({ environment: 'production', projectName: 'unrelated-project' }), project), /dedicated/);
+
+assert.throws(() => config(createRailwayContext({ environment: 'production', projectId: 'wrong-project' }), project), /Select Railway project/);

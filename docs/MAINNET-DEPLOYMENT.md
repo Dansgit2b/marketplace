@@ -254,3 +254,14 @@ point-in-time check and cannot prevent an asset administrator upgrading later.
 
 Primary references: [Starknet.js 10.8 deployment](https://starknet-js.com/docs/10.8.0/guides/contracts/create_contract/)
 and [OpenZeppelin's UDC address/interface](https://docs.openzeppelin.com/contracts-cairo/3.x/udc).
+
+## Configure the local signer interactively
+
+Run `pnpm contracts:env` from the repository root. It prompts without echo for
+`DEPLOYMENT_RPC_URL`, `DEPLOYMENT_SIGNER_ADDRESS` and
+`DEPLOYMENT_SIGNER_PRIVATE_KEY`, then atomically saves ignored `.env.deployment`
+with mode `600`. Blank responses retain existing values; supplying a private key
+switches from an optional signer module to private-key signing. This configures
+an existing funded account; it does not create/fund an account or submit a
+transaction. Keep this file local. The Railway API/indexer requires no signing
+key. Probe identities and complete the deployment plan/gates before using it.

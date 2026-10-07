@@ -1,6 +1,9 @@
 import { defineRailway, project, service, volume } from 'railway/iac';
 
 export default defineRailway((ctx) => {
+  if (ctx.projectId && ctx.projectId !== '554683c6-4840-40d5-a60b-864d7d1f4c25') {
+    throw new Error('Select Railway project 554683c6-4840-40d5-a60b-864d7d1f4c25.');
+  }
   if (ctx.projectName && ctx.projectName !== 'realms-marketplace') {
     throw new Error('Link the dedicated realms-marketplace project before planning.');
   }
@@ -48,5 +51,6 @@ export default defineRailway((ctx) => {
       NEXT_PUBLIC_MARKETPLACE_API_BASE: '/api/marketplace',
     },
   });
+  backend.volumeAttachments!['marketplace-data'].backupSchedules = ['DAILY', 'WEEKLY'];
   return project('realms-marketplace', { resources: [web, backend, data] });
 });

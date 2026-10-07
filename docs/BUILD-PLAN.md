@@ -42,8 +42,11 @@ Host both frontend and backend on Railway, with isolated `staging` and
 single backend service supervising API/indexer/metadata processes on one attached
 SQLite volume per environment. Railway cannot share that volume across services;
 keep one backend replica. Staging defaults to Sepolia and production to mainnet.
-See [Railway setup](RAILWAY.md) for configuration and operating steps. Repository
-configuration does not provision cloud resources or close launch gates.
+See [Railway setup](RAILWAY.md) for configuration and operating steps. The supplied
+Railway project now has healthy web/backend deployments in both environments,
+separate volume instances, daily/weekly backups and a verified ingress identity
+rule. Index workers and trading remain disabled pending RPC and contract inputs;
+hosting setup does not close the remaining launch gates.
 
 ### Realms-only launch baseline — confirmed 8 October 2026
 
