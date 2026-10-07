@@ -52,7 +52,7 @@ accepted block hashes. The tooling reuses the pinned Starknet.js 10.8.0 developm
 alias; the native backend gains no runtime dependency.
 
 Fill `config.json` with the intended deployer/admin addresses and their class
-hashes, immutable fee recipient/rate (0–500 bps), a fixed salt, UDC class hash,
+hashes, initial fee recipient/rate (0–500 bps), a fixed salt, UDC class hash,
 explicit maximum fee in **FRI** per transaction, and reviewed asset lists.
 There is deliberately no default fee, admin address, fee cap or asset approval.
 
@@ -265,3 +265,22 @@ switches from an optional signer module to private-key signing. This configures
 an existing funded account; it does not create/fund an account or submit a
 transaction. Keep this file local. The Railway API/indexer requires no signing
 key. Probe identities and complete the deployment plan/gates before using it.
+
+## Fee administration after deployment
+
+The administrator can use SDK `contract.admin.prepareSetFee(account, feeBps, recipient)`
+and `contract.admin.submit`, or export `buildSetFee(marketplace, feeBps, recipient)`
+for an administrator wallet. This atomically changes the new-order rate and the
+recipient for all future fills. The hard ceiling remains 500 bps; recipient must
+be nonzero. It works while paused and emits `FeePolicyChanged`. Existing orders
+retain their fee rate. New order calls must supply `max_fee_bps`.
+
+The deployment plan binds the **initial** fee terms. Deployment verification and
+activation continue to require those reviewed terms; an unexpected fee change
+during rollout fails verification. Routine post-launch fee administration is
+separate from that initial deployment attestation.
+
+This ABI revision adds one felt to order terms and one argument to creation.
+Regenerate/review class and ABI hashes and build the matching SDK/indexer before
+deployment. There is no mainnet marketplace to migrate yet. Old local fixture
+plans/databases must not be reused with the revised class.

@@ -33,7 +33,7 @@ OpenSea is the NFT product benchmark, not a claim of exhaustive feature parity. 
 | Administration | Confirmed non-upgradeable contract, limited multisig administration, cancellation available while paused |
 | Hosting | Railway staging (Sepolia) and production (mainnet), confirmed 8 October 2026; workspace, domains, operator and capacity still to select |
 
-User confirmed inclusive buyer pricing, token-order royalty snapshots, capped fill-time collection royalties and a non-upgradeable contract with limited administration on 6 October 2026. The implementation caps protocol fees at 500 basis points; the production rate, receiver, administrator addresses and approved asset registry remain explicit deployment inputs. These are material decisions, not numbers to invent during deployment. The broader product target does not change the user's selection of on-chain orders or ERC-721-only launch.
+User confirmed inclusive buyer pricing, token-order royalty snapshots, capped fill-time collection royalties and a non-upgradeable contract with limited administration on 6 October 2026. The implementation caps protocol fees at 500 basis points; production economics and administration must be recorded as explicit deployment inputs. These are material decisions, not numbers to invent during deployment. On 8 October 2026 the user authorized administrator updates to fee rate and recipient. `set_fee` atomically changes the new-order rate (0–500 bps) and future-fill recipient. Orders snapshot their rate; creation binds `max_fee_bps` so signing-time increases cannot change agreed deductions. Existing orders retain their rate, while fees route to the current recipient. Contract code remains non-upgradeable. The user subsequently selected an initial 500-bps fee and the local deployer signer as its recipient; the local deployment draft records that address. STRK and LORDS are selected payment currencies. Initial administrator and per-transaction STRK ceiling still need selection. The broader product target does not change the user's selection of on-chain orders or ERC-721-only launch.
 
 ### Railway hosting — confirmed 8 October 2026
 
@@ -414,6 +414,23 @@ and 1440px, with keyboard operation, error retention and wrapped controls. Reche
 remote CI on the pushed commit; these checks do not replace live-wallet or Railway
 staging acceptance. See operations for required old-database replacement.
 
+### Administrator fee updates — 8 October 2026
+
+`set_fee` updates the default rate and recipient atomically, with the existing
+500-bps ceiling, nonzero recipient and reentrancy/administrator checks. Creation
+binds a maximum fee and snapshots the accepted rate. Existing listings and offers
+retain that rate; fills use the current recipient. SDK builders, direct reads,
+order-form calldata, preflight accounting, policy replay and transaction reflection
+all use the revised ABI. The class and ABI manifests were regenerated.
+
+Local validation: 526 unit tests, 34 Cairo tests (including 512 fuzz cases), 62 backend tests,
+41 SDK/React tests plus packed consumers, 23 deployment-tool tests, nine order-form
+Storybook interactions, production/Storybook builds and four application browser
+smoke flows. Order-form layouts and keyboard focus were checked at 320, 768 and
+1440px. A signed devnet journey exercised fee changes, old-order quotes/settlement,
+SDK administration and a complete identical index replay. The signed local deployment CLI rehearsal also passed declaration/deployment, paused configuration, activation and handoff verification. This is local evidence;
+it does not close independent-review or public Sepolia/wallet launch gates.
+
 ### Release stages
 
 | Stage | Work and responsible role | Exit evidence / go-no-go |
@@ -601,7 +618,7 @@ The initial implementation slice is complete locally. Schedule launch from measu
 
 Before scheduling mainnet, assign a Cairo lead, backend/indexing lead, frontend lead, independent reviewer and release/operator responsibility. People may hold multiple roles, but scheduling must account for that. Book external review availability early. No delivery date or monthly hosting figure is asserted without staffing, audit availability, workload and provider pricing.
 
-Unresolved release inputs: actual production fee rate/recipient and administrator addresses; collection/currency inventory; RPC history limits; production host/budget/domain; backups and alert destinations; review provider; current legacy liquidity. None should be hidden inside a guessed completion date.
+Unresolved release inputs: initial administrator and transaction fee ceiling; STRK/LORDS compatibility evidence (Realms-only NFT launch, 500-bps initial fee and signer recipient are selected); RPC history limits; production host/budget/domain; backups and alert destinations; review provider; current legacy liquidity. None should be hidden inside a guessed completion date.
 
 ## 12. Definition of done
 
