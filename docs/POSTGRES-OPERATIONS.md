@@ -217,3 +217,9 @@ During Railway rolling deployment, the replacement indexer serves liveness with
 no RPC scan until the old writer stops and the lease becomes `held`. This lets the
 platform complete its health-check handover without allowing two writers. Check
 `lastProgress` and the lease state, not liveness alone, to confirm active indexing.
+
+The deployed strict scanner's first four 1,000-block windows measured 15.3–23.2
+blocks/s (18.5 blocks/s combined). Acquisition took 41.7–65.2 seconds per window;
+commits took 0.2–1.5 seconds. The remaining bottleneck is historical RPC retrieval,
+including rate limits. [Recorded measurements](evidence/backfill-throughput-2026-10-08.json)
+separate these live results from database-only and filtered-event-only probes.
