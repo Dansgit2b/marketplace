@@ -79,6 +79,11 @@ strict full-receipt scanning. Schema v2 records sparse historical ranges and rew
 an intersected range completely. Prior pre-v2 indexer binaries must not be used once
 sparse history exists; disable fast mode in a compatible v2 release for rollback.
 
+Production is running this mode. The first 300,000 blocks averaged 3,110 blocks/s;
+[recorded evidence](evidence/fast-history-2026-10-08.json) includes the pending
+reconciliation gate. This is an early-range measurement, not completed backfill
+or launch acceptance. Trading remains paused.
+
 ### Railway hosting — confirmed 8 October 2026
 
 Host frontend, API, indexer, metadata and PostgreSQL on Railway with isolated
@@ -589,13 +594,13 @@ badge or soft launch announcement is not an on-chain access control.
    record release SHA, DB identity, source checkpoints, metadata report, backup
    identifier and operator approval. Poll live freshness after the API switch.
 
-The CLI currently uses 100-block backfill windows; the index worker also uses
-100-block windows and the metadata worker processes up to ten tokens per pass.
-Measure throughput before changing concurrency. Estimate remaining history from
-`(H - current indexed block) / observed blocks per second`, revise across dense
-periods, and include metadata/replay verification time. There is no measured
-production backfill duration yet and no launch-date promise based on fixture SQL
-benchmarks.
+The CLI defaults to 100-block strict windows; the index worker defaults to
+1,000-block strict windows and the approved Realms fast mode uses up to 100,000
+historical blocks per range. Metadata processes up to ten tokens per pass.
+See [throughput evidence and controls](POSTGRES-OPERATIONS.md#fast-historical-mode-schema-v2).
+Estimate remaining history from `(H - current indexed block) / observed blocks
+per second`, revise across dense periods, and include reconciliation and metadata
+time. Range coverage rate is not a full-receipt download rate or a launch promise.
 
 ### Acceptance and monitoring
 

@@ -267,3 +267,11 @@ An isolated live-data shadow run advanced 100,000 blocks from checkpoint 818028 
 activity events. The production worker was still running during this measurement.
 Actual range throughput varies with event density and RPC throttling; retrieval-only
 benchmarks and strict-mode block rates are not directly interchangeable.
+
+Production enabled this release on 8 October 2026 after schema/API rollout and a
+readable logical backup. Its first three consecutive ranges advanced 300,000 blocks
+at 2,383–4,809 blocks/s (3,110 combined), with no rate-limit responses. The API
+returned `HISTORY_RECONCILIATION_REQUIRED` and `safeForCheckout=false`; the contract
+remained paused. Backfill and pinned reconciliation were still pending at capture.
+See [production evidence](evidence/fast-history-2026-10-08.json). These early ranges
+do not establish a sustained whole-history rate or completion time.
