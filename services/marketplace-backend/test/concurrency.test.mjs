@@ -44,3 +44,7 @@ test("a failed fanout drains in-flight work and stops scheduling before returnin
   assert.equal(finished, true);
   assert.equal(calls, 2);
 });
+
+test('falsy rejection reasons still stop and reject concurrent work',async()=>{
+ let calls=0;await assert.rejects(mapConcurrent([1,2,3],1,async()=>{calls++;throw null;}),error=>error===null);assert.equal(calls,1);
+});
