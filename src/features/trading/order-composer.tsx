@@ -14,7 +14,6 @@ import {
 import { useTrade } from "@/lib/marketplace/use-trade";
 import { prepareOrder, estimateSellerProceeds } from "@biblio/marketplace";
 
-import { TradeStatus } from "./trade-status";
 export function OrderComposer({
   collection,
   tokenIds,
@@ -180,7 +179,6 @@ export function OrderComposer({
               : title}
         </Button>
       )}
-      <TradeStatus state={trade.state} />
     </div>
   );
 }
