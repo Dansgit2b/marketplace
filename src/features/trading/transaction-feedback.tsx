@@ -17,7 +17,7 @@ export function TransactionFeedback() {
           ref={trigger}
           size="sm"
           variant="ghost"
-          className="min-h-9"
+          className="min-h-9 w-44 shrink-0"
           onClick={() => {
             setDismissed(null);
             if (trade.state.stage === "idle") void trade.resume();

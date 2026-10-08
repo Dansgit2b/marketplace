@@ -43,3 +43,13 @@ export const Recovery: Story = {
 export const Mobile: Story = {
   globals: { viewport: { value: "narrow", isRotated: false } },
 };
+
+export const StableStatusControl: Story = {
+  beforeEach() { useScenario.setState({connected:true,tradeState:{stage:'idle',message:''}}); },
+  play: async ({canvas,canvasElement}) => {
+    const width=canvas.getByRole('button',{name:'Check saved transaction'}).getBoundingClientRect().width;
+    useScenario.setState({tradeState:{stage:'submitted',hash:'0x123',message:'Transaction submitted. Waiting for acceptance…'}});
+    await within(canvasElement.ownerDocument.body).findByRole('dialog');
+    await expect(canvas.getByText('View transaction').getBoundingClientRect().width).toBe(width);
+  },
+};
