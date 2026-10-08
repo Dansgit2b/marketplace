@@ -198,3 +198,35 @@ test("persistent HTTP rate limits fail after a bounded retry budget", async () =
   );
   assert.equal(calls, 3);
 });
+
+test("individual receipt reads back off on JSON-RPC throttling without retrying ordinary application errors", async () => {
+  let calls = 0,
+    clock = 0;
+  const waits = [];
+  const rpc = new RpcClient(["https://rpc.invalid"], {
+    now: () => clock,
+    sleep: async (ms) => {
+      waits.push(ms);
+      clock += ms;
+    },
+    fetch: async (_, o) => {
+      const { id } = JSON.parse(o.body);
+      calls++;
+      return new Response(
+        JSON.stringify(
+          calls === 1
+            ? {
+                jsonrpc: "2.0",
+                id,
+                error: { code: 429, message: "rate limited" },
+              }
+            : { jsonrpc: "2.0", id, result: "ok" },
+        ),
+      );
+    },
+  });
+  assert.equal(await rpc.call("starknet_getBlockWithReceipts", {}), "ok");
+  assert.equal(calls, 2);
+  assert.equal(rpc.rateLimits, 1);
+  assert.ok(waits.some((ms) => ms >= 500));
+});

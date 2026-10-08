@@ -28,18 +28,23 @@ export class RpcClient {
   }
   async call(method, params, { endpoint } = {}) {
     const id = ++this.sequence;
-    let error;
-    for (let attempt = 0; attempt <= this.retries; attempt++) {
+    let error,
+      attempt = 0,
+      throttles = 0;
+    while (true) {
       try {
-        const url = endpoint ?? this.urls[attempt % this.urls.length];
-        const data = await this.request(url, {
-          jsonrpc: "2.0",
-          id,
-          method,
-          params,
-        });
+        const data = await this.request(
+          endpoint ?? this.urls[attempt % this.urls.length],
+          { jsonrpc: "2.0", id, method, params },
+        );
         if (data.id !== id || data.jsonrpc !== "2.0")
           throw new Error("Invalid RPC response identity");
+        if (data.error?.code === 429) {
+          this.rateLimits++;
+          throw Object.assign(new Error("RPC rate limited"), {
+            code: "RPC_RATE_LIMITED",
+          });
+        }
         if (data.error)
           throw new ApiError(
             "RPC_CONTRACT_ERROR",
@@ -51,12 +56,20 @@ export class RpcClient {
           throw new Error("Missing RPC result");
         return data.result;
       } catch (e) {
+        if (e.code === "RPC_RATE_LIMITED" && !(e instanceof ApiError)) {
+          if (throttles >= this.rateLimitRetries)
+            throw new ApiError(
+              "RPC_RATE_LIMITED",
+              "RPC rate limit retry budget exhausted",
+              503,
+            );
+          this.pauseForRateLimit(throttles++, e.retryAfter);
+          continue;
+        }
         if (e instanceof ApiError) throw e;
         error = e;
-        if (attempt < this.retries)
-          await new Promise((r) =>
-            setTimeout(r, Math.min(100 * 2 ** attempt, 1000)),
-          );
+        if (attempt >= this.retries) break;
+        await this.sleep(Math.min(100 * 2 ** attempt++, 1000));
       }
     }
     throw new ApiError(
