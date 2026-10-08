@@ -148,5 +148,38 @@
     "backend": "a9c5ff20-8ead-4c0f-bfea-aa3eed2dc1a7",
     "indexer": "edaec0ab-5afd-475f-89ff-9719172c3929",
     "metadata": "94da8385-6a1f-4298-b93f-29f103b340bf"
-  }
+  },
+  "liveVerification": {
+    "checkedAt": "2026-10-08T20:35:00.206Z",
+    "indexedBlock": 16094091,
+    "chainHead": 16094091,
+    "lagBlocks": 0,
+    "safeForCheckout": true,
+    "sourceCount": 5,
+    "enabledCollections": [
+      {
+        "name": "Realms",
+        "enabled": true
+      },
+      {
+        "name": "Loot Chests",
+        "enabled": true
+      },
+      {
+        "name": "Cosmetics",
+        "enabled": true
+      },
+      {
+        "name": "Golden Token",
+        "enabled": true
+      }
+    ],
+    "goldenTokenArtwork": "Browser verified cached SVG loaded, natural width 150.",
+    "offerQuote": "Golden Token 10 STRK: 5% fee, up to 5% royalty, at least 9 STRK seller proceeds; no wallet transaction submitted."
+  },
+  "limitations": [
+    "Artwork cache population is ongoing; it is separate from completed ownership backfill.",
+    "Loot Chest token 1 on-chain image CID QmWqqT4awbuzaHM7e5EBf9GGzNDQRz4WauUDSctVe9ZeBW timed out from the metadata worker; Pinata returned 404 during a separate probe. Other probed gateways returned 429 or timed out. Original URI remains available for retries.",
+    "No real-wallet NFT trade was performed in this rollout."
+  ]
 }
