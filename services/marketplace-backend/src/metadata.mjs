@@ -4,6 +4,7 @@ import {
   claimMetadataJob,
   completeMetadataJob,
 } from "./metadata-store.mjs";
+import { mapConcurrent } from "./concurrency.mjs";
 import http from "node:http";
 import https from "node:https";
 import { lookup } from "node:dns/promises";
@@ -44,7 +45,7 @@ export function publicAddress(ip) {
 }
 export async function fetchPublic(
   raw,
-  { maxBytes = 2 * 1024 * 1024, redirects = 3 } = {},
+  { maxBytes = 2 * 1024 * 1024, redirects = 3, timeoutMs = 8000 } = {},
 ) {
   const url = new URL(raw);
   if (
@@ -71,7 +72,7 @@ export async function fetchPublic(
           "accept-encoding": "identity",
           "user-agent": "BiblioMetadata/1",
         },
-        timeout: 8000,
+        timeout: timeoutMs,
         lookup: (_h, opts, cb) =>
           opts.all
             ? cb(null, [addresses[0]])
@@ -87,6 +88,7 @@ export async function fetchPublic(
           fetchPublic(new URL(res.headers.location, url).href, {
             maxBytes,
             redirects: redirects - 1,
+            timeoutMs,
           }).then(resolve, reject);
           return;
         }
@@ -195,15 +197,17 @@ export async function refreshMetadata(
   store,
   rpc,
   config,
-  { assetDir, limit = 10 } = {},
+  { assetDir, limit = 10, concurrency = 4, fetchResource = fetchPublic } = {},
 ) {
+  if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > 4)
+    throw new Error("Metadata concurrency must be 1–4");
   await expandMetadataJobs(store);
   const now = Date.now();
   const tokens = await metadataCandidates(store, now, limit);
-  for (const token of tokens) {
+  await mapConcurrent(tokens, concurrency, async (token) => {
     let patch;
-    const claim = await claimMetadataJob(store, token, now);
-    if (!claim) continue;
+    const claim = await claimMetadataJob(store, token, Date.now());
+    if (!claim) return;
     try {
       let values;
       try {
@@ -231,21 +235,38 @@ export async function refreshMetadata(
         );
       else
         bytes = (
-          await fetchPublic(
+          await fetchResource(
             resolveUri(uri, config.ipfsGateway ?? "https://ipfs.io/ipfs"),
           )
         ).bytes;
       const raw = JSON.parse(bytes.toString()),
         metadata = normalizeMetadata(raw);
-      let image = null;
-      if (metadata.image && (assetDir || store.dialect === "postgres")) {
+      const metadataHash = createHash("sha256").update(bytes).digest("hex");
+      // Immutable cached bytes can outlive transient origin failures. Reuse only
+      // when the source is unchanged; a new URI must never inherit old artwork.
+      const sameSource =
+        token.image &&
+        (token.metadata?.imageSourceUri === metadata.image ||
+          token.metadataHash === metadataHash);
+      const immutableImage =
+        typeof metadata.image === "string" &&
+        /^(ipfs:\/\/|https?:\/\/[^/]+\/ipfs\/)(Qm[1-9A-HJ-NP-Za-km-z]{44}|b[a-z2-7]{20,})(\/|$)/.test(
+          metadata.image,
+        );
+      let image = sameSource ? token.image : null;
+      let imageError = null;
+      if (
+        metadata.image &&
+        !(image && immutableImage) &&
+        (assetDir || store.dialect === "postgres")
+      ) {
         try {
-          const asset = await fetchPublic(
+          const asset = await fetchResource(
             resolveUri(
               metadata.image,
               config.ipfsGateway ?? "https://ipfs.io/ipfs",
             ),
-            { maxBytes: 10 * 1024 * 1024 },
+            { maxBytes: 10 * 1024 * 1024, timeoutMs: 30000 },
           );
           const ext = {
             "image/png": "png",
@@ -254,6 +275,7 @@ export async function refreshMetadata(
             "image/gif": "gif",
             "image/svg+xml": "svg",
           }[asset.contentType];
+          if (!ext) throw new Error("Unsupported image content type");
           if (ext) {
             const name =
               createHash("sha256").update(asset.bytes).digest("hex") +
@@ -267,8 +289,8 @@ export async function refreshMetadata(
             }
             image = `/api/marketplace/v1/chains/${config.chain}/assets/${name}`;
           }
-        } catch {
-          /* The metadata remains useful when its media is unavailable. */
+        } catch (error) {
+          imageError = error.message;
         }
       }
       const attributes = metadata.attributes;
@@ -276,6 +298,15 @@ export async function refreshMetadata(
         metadata: {
           ...metadata,
           image,
+          imageSourceUri: metadata.image,
+          imageStatus: imageError
+            ? "failed"
+            : image
+              ? "ready"
+              : metadata.image
+                ? "failed"
+                : "absent",
+          imageError,
           attributes: attributes.map((a) => ({
             trait_type: a.name,
             value: a.value,
@@ -285,11 +316,11 @@ export async function refreshMetadata(
         resourceCount: metadata.resourceCount,
         image,
         metadataUri: uri,
-        metadataHash: createHash("sha256").update(bytes).digest("hex"),
+        metadataHash,
         metadataStatus: "ready",
         metadataError: null,
         metadataFetchedAt: now,
-        metadataNextAttempt: now + 60000,
+        metadataNextAttempt: Date.now() + (imageError ? 300000 : 60000),
       };
     } catch (e) {
       patch = {
@@ -299,6 +330,6 @@ export async function refreshMetadata(
       };
     }
     await completeMetadataJob(store, token, claim, patch);
-  }
+  });
   return tokens.length;
 }
