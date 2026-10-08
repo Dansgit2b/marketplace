@@ -181,9 +181,9 @@ export const OfferAwaitingConfirmation: Story = {
       .getBoundingClientRect().top;
     await userEvent.click(button);
     const body = within(canvasElement.ownerDocument.body);
-    await expect(
-      await body.findByRole("dialog", { name: "Waiting for confirmation" }),
-    ).toBeVisible();
+    await waitFor(() => expect(
+      body.getByRole("dialog", { name: "Waiting for confirmation" }),
+    ).toBeVisible());
     await expect(
       canvas.getByTestId("after-composer").getBoundingClientRect().top,
     ).toBe(top);
