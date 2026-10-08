@@ -17,7 +17,10 @@ export const fixtureConfig: MarketConfig = {
   paused: false,
   demo: false,
   currencies: [{ address: CURRENCY, symbol: "STRK", decimals: 18 }],
-  collections: [{ address: "0xa", name: "Realms" }],
+  collections: [
+    { address: "0xa", name: "Realms" },
+    { address: "0xb", name: "Loot Chests", royaltyBps: 500 },
+  ],
   status: {
     chain: "LOCAL",
     marketplace: MARKET,

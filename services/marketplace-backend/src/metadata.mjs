@@ -1,3 +1,5 @@
+import { address } from "./domain.mjs";
+import { parseTokenMetadata, decodeInlineImage } from "./metadata-data.mjs";
 import {
   expandMetadataJobs,
   metadataCandidates,
@@ -144,7 +146,11 @@ function feltBytes(v, length) {
     : Buffer.alloc(0);
 }
 export function decodeUri(felts) {
-  if (!Array.isArray(felts) || !felts.length || felts.length > 1024)
+  if (
+    !Array.isArray(felts) ||
+    !felts.length ||
+    felts.length > Math.ceil((2 * 1024 * 1024) / 31) + 3
+  )
     throw new Error("Invalid token URI");
   if (felts.length === 1) {
     const h = BigInt(felts[0]).toString(16);
@@ -252,7 +258,12 @@ export async function refreshMetadata(
             resolveUri(uri, config.ipfsGateway ?? "https://ipfs.io/ipfs"),
           )
         ).bytes;
-      const raw = JSON.parse(bytes.toString()),
+      const raw = parseTokenMetadata(
+          bytes.toString(),
+          (config.collections ?? []).find(
+            (c) => address(c.address) === address(token.collection),
+          )?.metadata?.repairControlCharacters === true,
+        ),
         metadata = normalizeMetadata(raw);
       const metadataHash = createHash("sha256").update(bytes).digest("hex");
       // Immutable cached bytes can outlive transient origin failures. Reuse only
@@ -274,15 +285,17 @@ export async function refreshMetadata(
         (assetDir || store.dialect === "postgres")
       ) {
         try {
-          const asset = await (
-            fetchResource === fetchPublic ? fetchMedia : fetchResource
-          )(
-            resolveUri(
-              metadata.image,
-              config.ipfsGateway ?? "https://ipfs.io/ipfs",
-            ),
-            { maxBytes: 10 * 1024 * 1024, timeoutMs: 30000 },
-          );
+          const asset = metadata.image.startsWith("data:")
+            ? decodeInlineImage(metadata.image)
+            : await (
+                fetchResource === fetchPublic ? fetchMedia : fetchResource
+              )(
+                resolveUri(
+                  metadata.image,
+                  config.ipfsGateway ?? "https://ipfs.io/ipfs",
+                ),
+                { maxBytes: 10 * 1024 * 1024, timeoutMs: 30000 },
+              );
           const ext = {
             "image/png": "png",
             "image/jpeg": "jpg",

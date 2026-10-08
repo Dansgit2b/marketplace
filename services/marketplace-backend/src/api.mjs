@@ -244,7 +244,7 @@ export function createApi({ store, config, rpc, verifySignature }) {
         );
         res.setHeader(
           "Content-Security-Policy",
-          "sandbox; default-src 'none'; style-src 'unsafe-inline'",
+          "sandbox; default-src 'none'; img-src data:; style-src 'unsafe-inline'",
         );
         res.setHeader("Cache-Control", "public,max-age=31536000,immutable");
         res.writeHead(200);

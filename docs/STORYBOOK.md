@@ -158,9 +158,12 @@ read-only status check. Dismissal never clears or resubmits a saved transaction.
 These stories simulate wallet responses; they do not sign real transactions.
 
 `Trading/Price input` checks decimal entry without floating-point conversion,
-currency switching, long values, validation and disabled states. The Realms
-composer has no editable royalty cap: new orders submit a zero cap and show a
-fixed 0% creator royalty beside the configured marketplace fee and seller proceeds.
+currency switching, long values, validation and disabled states. The
+composer has no editable royalty cap. Realms uses zero; reviewed royalty-bearing
+collections use the registry ceiling, display "up to" that percentage and show
+minimum seller proceeds. `CreatorRoyalty` and `CreatorRoyaltyMobile` cover a 5%
+ceiling and exact calldata. Mixed selections conservatively use the highest
+reviewed ceiling. Layouts were checked at 390, 768 and 1440px.
 
 Exo 2 and Geist Mono are bundled under `public/brand/fonts` with their OFL licenses.
 This removes the Google font-service dependency from production builds. The preview
