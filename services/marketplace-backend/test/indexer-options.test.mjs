@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { indexerOptions } from "../src/indexer-options.mjs";
 test("index throughput controls are bounded and environment overrides are explicit", () => {
   assert.deepEqual(indexerOptions({}), {
+    fastHistory: false,
+    historyWindow: 100000,
     window: 1000,
     receiptConcurrency: 8,
     receiptBatchSize: 1,

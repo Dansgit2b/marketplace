@@ -173,7 +173,7 @@ proposed hourly backup objective. Contract activation remains a separate decisio
 
 ## Backfill throughput controls
 
-The indexer still retrieves full receipts for **every** block and compares watched
+Strict mode retrieves full receipts for **every** block and compares watched
 events with the complete paginated event scan. It retains every block header and
 per-block rewind record. A 1,000-block scan window is not a promise of 1,000 blocks
 per second.
@@ -194,7 +194,7 @@ Blocks with no watched events are bulk-written when there are no marketplace
 listings. Each header and source-progress before-image remains stored. Event
 blocks use the normal reducer; once listings exist, ordinary floor-expiry logic
 is retained even for empty blocks. This optimization changes execution, not the
-schema, and permits rollback to the previous compatible indexer image.
+schema. The separate historical-range mode below adds schema v2 and has stricter rollback requirements.
 
 Progress logs include `blocksPerSecond`, `acquireMs`, `commitMs` and
 `rateLimitedResponses`. Tune against sustained measurements and provider quotas;
@@ -223,3 +223,47 @@ blocks/s (18.5 blocks/s combined). Acquisition took 41.7–65.2 seconds per wind
 commits took 0.2–1.5 seconds. The remaining bottleneck is historical RPC retrieval,
 including rate limits. [Recorded measurements](evidence/backfill-throughput-2026-10-08.json)
 separate these live results from database-only and filtered-event-only probes.
+
+## Fast historical mode (schema v2)
+
+Approved by the user on 8 October 2026. `MARKETPLACE_INDEX_FAST_HISTORY=true` enables
+100,000-block historical windows by default (`MARKETPLACE_INDEX_HISTORY_WINDOW`,
+maximum 100000). Only the reviewed Realms mainnet address/class profile is supported.
+The cutoff is before marketplace deployment and at least 5,000 blocks behind the
+observed head, adjusted to a timestamp boundary. A non-finalized range anchor falls
+back to strict scanning. Marketplace activity and the recent tail use full receipts.
+
+The event feed is completely paginated and each returned event-bearing block plus
+the end anchor is fetched with full receipts. Missing/duplicate reported events,
+malformed blocks and changing anchors reject the range. Header/event/entity changes
+and source progress commit atomically. `chain.history_ranges` explicitly records the
+covered interval; only event-bearing and end-anchor headers are stored for that
+interval. A rewind into a sparse range restores the entire range's preceding state.
+Application data is preserved.
+
+Before crossing the cutoff, the worker reconciles live NFT supply, every live owner,
+token approval, observed operator pair and each live owner's marketplace operator
+at pinned hashes. It saves resumable progress in `chain.status` under `history`.
+The API returns `HISTORY_RECONCILIATION_REQUIRED` until this passes; a missing
+canonical checkpoint also invalidates the certificate. Reconciliation never repairs
+mismatches by inventing events or silently replacing ownership.
+
+Realms uses timestamp-based ERC721Votes supply: one voting unit moves per NFT
+mint/burn. Supply for block H is read at H+1 using H's timestamp, only when H+1 has
+a later timestamp and links directly to H. Both classes/hashes are checked. Source:
+[Realms transfer hooks](https://github.com/BibliothecaDAO/lordship-stREALMS/blob/main/stRealms/realms/src/contracts/strealm.cairo)
+and [supply checkpoints](https://github.com/BibliothecaDAO/lordship-stREALMS/blob/main/stRealms/realms/src/components/erc721/extensions/erc721_votes.cairo).
+A direct mainnet probe at H=16050532 reported 5,132 live NFTs.
+
+Migration order: apply schema v2 and re-provision runtime grants; deploy the API
+readiness gate and compatible worker; preserve a logical backup; then enable fast
+mode on the production indexer. Staging stays disabled without its test deployment.
+After sparse ranges exist, rollback uses a schema-v2-compatible release with fast
+mode disabled. Do not deploy the original dense-only indexer or restore an old
+snapshot over newer application writes. Contract activation remains separate.
+
+An isolated live-data shadow run advanced 100,000 blocks from checkpoint 818028 in
+42,173 ms (2,371 blocks/s), verifying 372 receipt blocks and projecting 483 NFT
+activity events. The production worker was still running during this measurement.
+Actual range throughput varies with event density and RPC throttling; retrieval-only
+benchmarks and strict-mode block rates are not directly interchangeable.

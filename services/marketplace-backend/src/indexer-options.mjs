@@ -7,6 +7,8 @@ export function indexerOptions(env = process.env) {
     return value;
   };
   return {
+    fastHistory: env.MARKETPLACE_INDEX_FAST_HISTORY === "true",
+    historyWindow: read("MARKETPLACE_INDEX_HISTORY_WINDOW", 100000, 100000),
     window: read("MARKETPLACE_INDEX_WINDOW", 1000, 1000),
     receiptConcurrency: read("MARKETPLACE_INDEX_CONCURRENCY", 8, 32),
     receiptBatchSize: read("MARKETPLACE_INDEX_RPC_BATCH", 1, 32),

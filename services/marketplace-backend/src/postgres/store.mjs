@@ -347,6 +347,193 @@ export class PgStore {
         [JSON.stringify([...final].map(([id, body]) => ({ id, body })))],
       );
   }
+  async applyEventRange({ from, to, blocks, cutoff }) {
+    if (
+      !Number.isSafeInteger(from) ||
+      !Number.isSafeInteger(to) ||
+      to < from ||
+      to - from >= 100000 ||
+      !Array.isArray(blocks) ||
+      !blocks.length ||
+      blocks.at(-1).number !== to
+    )
+      throw new Error("Invalid historical range");
+    return this.transaction(async () => {
+      const head = await this.head();
+      if (!head || from !== head.number + 1)
+        throw new ApiError(
+          "CHAIN_GAP",
+          "Historical range does not extend indexed head",
+          409,
+        );
+      if ((await this.query("SELECT 1 FROM market.orders LIMIT 1")).rowCount)
+        throw new Error("Fast history cannot run over an active market book");
+      if (!Number.isSafeInteger(cutoff) || to > cutoff)
+        throw new Error("Historical cutoff exceeded");
+      const allowed = new Set([
+        "transfer",
+        "approval",
+        "operator_approval",
+        "metadata_update",
+      ]);
+      const required = new Map(),
+        journal = [],
+        events = [],
+        headers = [],
+        seen = new Set();
+      const need = (kind, id) => {
+        if (!required.has(kind)) required.set(kind, new Set());
+        required.get(kind).add(id);
+      };
+      let prior = head;
+      for (const block of blocks) {
+        if (
+          block.number <= prior.number ||
+          block.number > to ||
+          (block.number === prior.number + 1 && block.parentHash !== prior.hash)
+        )
+          throw new ApiError(
+            "CHAIN_GAP",
+            "Invalid historical block order or parent",
+            409,
+          );
+        headers.push({
+          number: block.number,
+          hash: block.hash,
+          parent: block.parentHash,
+          timestamp: block.timestamp,
+        });
+        prior = block;
+        for (const [i, event] of block.events.entries()) {
+          if (!allowed.has(event.type))
+            throw new ApiError(
+              "HISTORY_EVENT_UNSUPPORTED",
+              "Only NFT events may use historical range projection",
+            );
+          const tx = event.transactionHash ?? `fixture:${block.hash}`,
+            idx = event.eventIndex ?? i,
+            key = `${block.hash}:${tx}:${idx}`;
+          if (seen.has(key))
+            throw new ApiError(
+              "DUPLICATE_EVENT",
+              "Duplicate historical receipt event",
+            );
+          seen.add(key);
+          const provenance = {
+            blockNumber: block.number,
+            blockHash: block.hash,
+            transactionHash: tx,
+            eventIndex: idx,
+            timestamp: block.timestamp,
+          };
+          for (const [kind, id] of projectionReads(event, provenance))
+            need(kind, id);
+          // NFT write identities do not depend on previous state. Reuse the pure
+          // reducer to discover them, then replay against the loaded state below.
+          projectEvent(
+            event,
+            provenance,
+            () => null,
+            (kind, id) => need(kind, id),
+          );
+          events.push({ event, provenance });
+          journal.push({ block_hash: block.hash, tx, idx, body: event });
+        }
+      }
+      const end = blocks.at(-1);
+      for (const source of end.sources ?? []) need("progress", source);
+      const state = new Map(),
+        writes = new Map(),
+        undo = new Map();
+      for (const [kind, ids] of required) {
+        for (const id of ids) state.set(`${kind}:${id}`, null);
+        for (const row of (
+          await this.query(
+            `SELECT id,body FROM ${table(kind)} WHERE id=ANY($1::text[])`,
+            [[...ids]],
+          )
+        ).rows)
+          state.set(`${kind}:${row.id}`, row.body);
+      }
+      const get = (kind, id) => {
+        const key = `${kind}:${id}`;
+        if (!state.has(key))
+          throw new Error("Historical projection read not declared");
+        return state.get(key);
+      };
+      const put = (kind, id, body, height) => {
+        const key = `${kind}:${id}`,
+          undoKey = `${height}:${key}`;
+        if (!state.has(key))
+          throw new Error("Historical projection write not declared");
+        if (!undo.has(undoKey))
+          undo.set(undoKey, { height, kind, id, before: state.get(key) });
+        const value = { ...body };
+        if (kind === "token")
+          for (const key of METADATA_KEYS) delete value[key];
+        state.set(key, value);
+        if (!writes.has(kind)) writes.set(kind, new Map());
+        writes.get(kind).set(id, value);
+      };
+      for (const { event, provenance } of events)
+        projectEvent(event, provenance, get, put);
+      for (const source of end.sources ?? []) {
+        const old = get("progress", source);
+        put(
+          "progress",
+          source,
+          {
+            source,
+            startBlock: old?.startBlock ?? end.sourceStarts?.[source] ?? null,
+            block: to,
+            hash: end.hash,
+            observedAt: end.observedAt ?? Date.now(),
+          },
+          to,
+        );
+      }
+      const insert = async (target, columns, records, conflict = "") => {
+        for (let i = 0; i < records.length; i += 1000)
+          await this.query(
+            `INSERT INTO ${target} SELECT ${columns.map((c) => c.split(" ")[0]).join(",")} FROM jsonb_to_recordset($1::jsonb) AS x(${columns.join(",")}) ${conflict}`,
+            [JSON.stringify(records.slice(i, i + 1000))],
+          );
+      };
+      await insert(
+        "chain.blocks",
+        ["number bigint", "hash text", "parent text", "timestamp bigint"],
+        headers,
+      );
+      await insert(
+        "chain.events",
+        ["block_hash text", "tx text", "idx integer", "body jsonb"],
+        journal,
+        "ON CONFLICT DO NOTHING",
+      );
+      await insert(
+        "chain.undo",
+        ["height bigint", "kind text", "id text", "before jsonb"],
+        [...undo.values()],
+      );
+      for (const [kind, values] of writes)
+        await insert(
+          table(kind),
+          ["id text", "body jsonb"],
+          [...values].map(([id, body]) => ({ id, body })),
+          "ON CONFLICT(id) DO UPDATE SET body=excluded.body",
+        );
+      await this.query(
+        "INSERT INTO chain.history_ranges VALUES($1,$2,$3,$4,$5)",
+        [from, to, end.hash, blocks.length, journal.length],
+      );
+      await this.put("status", "history", {
+        mode: "event_ranges",
+        state: "pending",
+        cutoff,
+        lastRangeEnd: to,
+      });
+    });
+  }
   async applyBlock(block) {
     return this.transaction(async () => {
       if (this.lease?.lost)
@@ -479,6 +666,14 @@ export class PgStore {
   }
   async rewind(height) {
     return this.transaction(async () => {
+      const range = (
+        await this.query(
+          "SELECT MIN(from_block) AS start FROM chain.history_ranges WHERE from_block<=$1 AND to_block>$1",
+          [height],
+        )
+      ).rows[0];
+      if (range.start !== null) height = Number(range.start) - 1;
+
       const rows = (
         await this.query(
           "SELECT height,kind,id,before FROM chain.undo WHERE height>$1 ORDER BY height DESC,kind,id",
@@ -501,6 +696,22 @@ export class PgStore {
         "UPDATE chain.notification_outbox SET canonical=false WHERE height>$1",
         [height],
       );
+      const history = await this.get("status", "history");
+      if (
+        history &&
+        (history.state !== "passed" || history.checkpointBlock > height)
+      ) {
+        const remaining = (
+          await this.query("SELECT 1 FROM chain.history_ranges LIMIT 1")
+        ).rowCount;
+        if (remaining)
+          await this.put("status", "history", {
+            mode: "event_ranges",
+            state: "pending",
+            cutoff: history.cutoff,
+          });
+        else await this.query("DELETE FROM chain.status WHERE id='history'");
+      }
       // Metadata is rebuildable. In-flight results from the former generation cannot apply.
       await this.query("DELETE FROM market.token_metadata");
       await this.query("DELETE FROM market.attributes");

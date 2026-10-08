@@ -61,6 +61,24 @@ benchmark improved from 13 to about 7,600 empty blocks/second with exact row par
 this is **not** the end-to-end backfill rate. Production throughput must be measured
 against the RPC quota. See the PostgreSQL operations throughput controls.
 
+### Fast historical mode — approved 8 October 2026
+
+The user explicitly approved changing historical verification to accelerate the
+Realms backfill. Older NFT-only history may use bounded event ranges: every returned
+event-bearing block is checked against full receipts, and finalized range anchors
+are checked before and after acquisition. Empty historical blocks are not fetched
+individually. This is not a claim of independent completeness for every historical
+event; live inventory is reconciled at a pinned checkpoint before trading.
+
+The reviewed Realms ERC721Votes profile supplies a timestamp checkpoint total.
+All indexed live owners and token approvals, observed operator pairs and each live
+owner's marketplace approval are checked at that fixed block. Supply equality plus
+owner checks verifies complete live inventory. A mismatch keeps checkout blocked.
+The checkpoint is before marketplace deployment; marketplace/recent activity retains
+strict full-receipt scanning. Schema v2 records sparse historical ranges and rewinds
+an intersected range completely. Prior pre-v2 indexer binaries must not be used once
+sparse history exists; disable fast mode in a compatible v2 release for rollback.
+
 ### Railway hosting — confirmed 8 October 2026
 
 Host frontend, API, indexer, metadata and PostgreSQL on Railway with isolated

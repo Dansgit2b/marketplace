@@ -1,3 +1,8 @@
+import {
+  chooseHistoryCutoff,
+  historyProfile,
+  reconcileHistory,
+} from "./history.mjs";
 import { mapConcurrent } from "./concurrency.mjs";
 import { address, ApiError } from "./domain.mjs";
 import { decodeEvent } from "./decode.mjs";
@@ -30,6 +35,8 @@ async function scanRange(
     receiptConcurrency = 8,
     receiptBatchSize = 1,
     commitBatchSize = 250,
+    fastHistory = false,
+    historyWindow = 100000,
   } = {},
 ) {
   const started = performance.now(),
@@ -38,6 +45,7 @@ async function scanRange(
     [receiptConcurrency, 32],
     [receiptBatchSize, 32],
     [commitBatchSize, 1000],
+    [historyWindow, 100000],
   ])
     if (!Number.isInteger(value) || value < 1 || value > max)
       throw new ApiError(
@@ -121,10 +129,24 @@ async function scanRange(
   const from = head
     ? head.number + 1
     : Math.min(...sources.map((s) => s.start));
-  const end = Math.min(
+  const history =
+    store.dialect === "postgres" ? await store.get("status", "history") : null;
+  let cutoff = history?.cutoff;
+  if (fastHistory && store.applyEventRange && !cutoff && head)
+    cutoff = await chooseHistoryCutoff(rpc, config, latest, from);
+  let useFast = !!(
+    fastHistory &&
+    store.applyEventRange &&
+    cutoff &&
+    from <= cutoff
+  );
+  if (useFast) historyProfile(config);
+  let end = Math.min(
     latest.block_number,
-    from + window - 1,
+    from + (useFast ? historyWindow : window) - 1,
     stopAt ?? Infinity,
+    ...(history && history.state !== "passed" ? [history.cutoff] : []),
+    ...(useFast ? [cutoff] : []),
   );
   await store.put("status", "rpc", {
     head: latest.block_number,
@@ -133,6 +155,8 @@ async function scanRange(
     identityVerified: !!config.marketplaceClassHash,
     error: null,
   });
+  if (history && history.state !== "passed" && head?.number >= history.cutoff)
+    return reconcileHistory(store, rpc, config, history);
   if (from > end) {
     await store.reconcileNotifications();
     return {
@@ -140,10 +164,36 @@ async function scanRange(
       head: latest.block_number,
     };
   }
-  const anchor = await rpc.call("starknet_getBlockWithTxHashes", {
+  let anchor = await rpc.call("starknet_getBlockWithTxHashes", {
     block_id: { block_number: end },
   });
+  if (useFast && anchor.status !== "ACCEPTED_ON_L1") {
+    useFast = false;
+    end = Math.min(
+      latest.block_number,
+      from + window - 1,
+      cutoff,
+      stopAt ?? Infinity,
+    );
+    anchor = await rpc.call("starknet_getBlockWithTxHashes", {
+      block_id: { block_number: end },
+    });
+  }
+  if (useFast)
+    for (const collection of config.collections) {
+      const actual = await rpc.call("starknet_getClassHashAt", {
+        block_id: { block_hash: anchor.block_hash },
+        contract_address: collection.address,
+      });
+      if (!equal(actual, collection.classHash))
+        throw new ApiError(
+          "CLASS_MISMATCH",
+          "Historical collection class differs from the reviewed profile",
+          503,
+        );
+    }
   const found = new Map();
+  let eventTotal = 0;
   for (const source of sources) {
     if (source.start > end) continue;
     const start = Math.max(from, source.start);
@@ -173,6 +223,12 @@ async function scanRange(
           address(e.from_address) !== source.address
         )
           throw new ApiError("INVALID_RPC_EVENTS", "Out-of-scope RPC event.");
+        if (++eventTotal > 20000 && useFast)
+          throw new ApiError(
+            "HISTORY_RANGE_DENSE",
+            "Reduce the historical range window: too many events",
+            503,
+          );
         const entries = found.get(e.block_number) ?? [];
         entries.push(e);
         found.set(e.block_number, entries);
@@ -215,7 +271,9 @@ async function scanRange(
       return { n, hash: block.block_hash, error };
     }
   };
-  const heights = Array.from({ length: end - from + 1 }, (_, i) => from + i);
+  const heights = useFast
+    ? [...new Set([...found.keys(), end])].sort((a, b) => a - b)
+    : Array.from({ length: end - from + 1 }, (_, i) => from + i);
   let blocks;
   if (receiptBatchSize > 1 && rpc.batch) {
     const groups = [];
@@ -253,36 +311,51 @@ async function scanRange(
       "Range changed while reading receipts.",
     );
   const acquired = performance.now();
-  let pending = [],
-    eventCount = 0;
-  const flush = async () => {
-    if (store.applyBlocks) await store.applyBlocks(pending);
-    else for (const block of pending) await store.applyBlock(block);
-    pending = [];
-  };
-  for (const block of blocks) {
-    if (block.error) {
-      await flush();
-      throw block.error;
+  let eventCount = 0;
+  if (useFast) {
+    for (const block of blocks) {
+      if (block.error) throw block.error;
+      eventCount += block.prepared.events.length;
     }
-    pending.push(block.prepared);
-    eventCount += block.prepared.events.length;
-    if (pending.length >= commitBatchSize) await flush();
+    await store.applyEventRange({
+      from,
+      to: end,
+      blocks: blocks.map((b) => b.prepared),
+      cutoff,
+    });
+  } else {
+    let pending = [];
+    const flush = async () => {
+      if (store.applyBlocks) await store.applyBlocks(pending);
+      else for (const b of pending) await store.applyBlock(b);
+      pending = [];
+    };
+    for (const block of blocks) {
+      if (block.error) {
+        await flush();
+        throw block.error;
+      }
+      pending.push(block.prepared);
+      eventCount += block.prepared.events.length;
+      if (pending.length >= commitBatchSize) await flush();
+    }
+    await flush();
   }
-  await flush();
   const finished = performance.now(),
     elapsedMs = Math.round(finished - started);
   return {
     indexed: end,
     head: latest.block_number,
-    blocks: blocks.length,
+    blocks: end - from + 1,
+    receiptBlocks: blocks.length,
+    mode: useFast ? "event_ranges" : "full_receipts",
     events: eventCount,
     elapsedMs,
     acquireMs: Math.round(acquired - started),
     rateLimitedResponses: (rpc.rateLimits ?? 0) - rateLimitsBefore,
     commitMs: Math.round(finished - acquired),
     blocksPerSecond: Number(
-      ((blocks.length * 1000) / (finished - started)).toFixed(1),
+      (((end - from + 1) * 1000) / (finished - started)).toFixed(1),
     ),
   };
 }
