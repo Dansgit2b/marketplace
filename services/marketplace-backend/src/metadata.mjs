@@ -5,6 +5,7 @@ import {
   completeMetadataJob,
 } from "./metadata-store.mjs";
 import { mapConcurrent } from "./concurrency.mjs";
+import { createMediaFetcher } from "./media-fetch.mjs";
 import http from "node:http";
 import https from "node:https";
 import { lookup } from "node:dns/promises";
@@ -94,7 +95,17 @@ export async function fetchPublic(
         }
         if (res.statusCode !== 200) {
           res.resume();
-          reject(new Error(`Metadata HTTP ${res.statusCode}`));
+          const retry = res.headers["retry-after"];
+          const retryAfterMs =
+            retry && /^\d+$/.test(retry)
+              ? Number(retry) * 1000
+              : Math.max(0, Date.parse(retry ?? "") - Date.now()) || 0;
+          reject(
+            Object.assign(new Error(`Metadata HTTP ${res.statusCode}`), {
+              status: res.statusCode,
+              retryAfterMs,
+            }),
+          );
           return;
         }
         const chunks = [];
@@ -122,6 +133,8 @@ export async function fetchPublic(
     req.on("error", reject);
   });
 }
+const fetchMedia = createMediaFetcher(fetchPublic);
+
 function feltBytes(v, length) {
   const n = BigInt(v);
   if (n < 0n || n >= 1n << BigInt(length * 8))
@@ -261,7 +274,9 @@ export async function refreshMetadata(
         (assetDir || store.dialect === "postgres")
       ) {
         try {
-          const asset = await fetchResource(
+          const asset = await (
+            fetchResource === fetchPublic ? fetchMedia : fetchResource
+          )(
             resolveUri(
               metadata.image,
               config.ipfsGateway ?? "https://ipfs.io/ipfs",
