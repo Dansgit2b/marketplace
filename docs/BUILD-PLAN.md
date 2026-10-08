@@ -54,7 +54,12 @@ Railway PostgreSQL dump/restore passed every source-table digest. The separate
 scanner resumed past checkpoint 721085 and metadata processing resumed.
 [Migration evidence](evidence/postgres-cutover-2026-10-08.json) records counts,
 digests and identity. The contract remains paused; full historical backfill is open.
-Backfill RPC acquisition remains a separate performance concern.
+Backfill RPC acquisition remains a separate performance concern. The follow-up
+throughput change adds bounded JSON-RPC batches, rate-limit backoff, compact receipt
+processing and atomic bulk header/progress writes. An isolated Railway database
+benchmark improved from 13 to about 7,600 empty blocks/second with exact row parity;
+this is **not** the end-to-end backfill rate. Production throughput must be measured
+against the RPC quota. See the PostgreSQL operations throughput controls.
 
 ### Railway hosting — confirmed 8 October 2026
 

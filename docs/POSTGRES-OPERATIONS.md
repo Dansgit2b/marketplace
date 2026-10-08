@@ -170,3 +170,44 @@ See [the migration report](evidence/postgres-cutover-2026-10-08.json).
 The original SQLite snapshots/volume and the logical dump are retained. This does
 not establish completed backfill, peak-load acceptance, automatic failover or the
 proposed hourly backup objective. Contract activation remains a separate decision.
+
+## Backfill throughput controls
+
+The indexer still retrieves full receipts for **every** block and compares watched
+events with the complete paginated event scan. It retains every block header and
+per-block rewind record. A 1,000-block scan window is not a promise of 1,000 blocks
+per second.
+
+| Indexer environment variable | Default | Bounds |
+| --- | --- | --- |
+| `MARKETPLACE_INDEX_WINDOW` | 1000 blocks | 1–1000 |
+| `MARKETPLACE_INDEX_RPC_BATCH` | 1 (individual reads) | 1–32 |
+| `MARKETPLACE_INDEX_CONCURRENCY` | 8 simultaneous RPC requests/batches | 1–32 |
+| `MARKETPLACE_INDEX_COMMIT_BATCH` | 250 validated blocks per transaction | 1–1000 |
+
+Oversized RPC responses split into smaller sequential batches. HTTP/JSON-RPC 429
+responses trigger shared bounded backoff; successful items survive while only
+throttled items are retried. Unknown/missing/duplicate IDs and coverage mismatches
+fail closed. Failed parallel work drains before another scan starts.
+
+Blocks with no watched events are bulk-written when there are no marketplace
+listings. Each header and source-progress before-image remains stored. Event
+blocks use the normal reducer; once listings exist, ordinary floor-expiry logic
+is retained even for empty blocks. This optimization changes execution, not the
+schema, and permits rollback to the previous compatible indexer image.
+
+Progress logs include `blocksPerSecond`, `acquireMs`, `commitMs` and
+`rateLimitedResponses`. Tune against sustained measurements and provider quotas;
+higher concurrency can reduce throughput through throttling. Wallet/API/metadata
+requests share provider capacity, even though their processes are separate.
+
+An isolated Railway database benchmark on 8 October 2026 committed the same 1,000
+empty blocks in 77,228 ms with individual writes versus 132 ms with bulk writes.
+Complete header/progress/undo row parity passed. This measures database throughput
+only; historical RPC retrieval remains necessary and is separately rate-limited.
+
+Production retains eight individual receipt reads in flight: a matched 256-block
+RPC test measured 26.4 blocks/s for that configuration, versus 16.3 blocks/s and
+30 rate-limited responses with four 16-block batches. Full receipt digests matched.
+JSON-RPC batching remains configurable for providers/quotas that can sustain it;
+the current gain comes primarily from bulk database writes and larger scan windows.

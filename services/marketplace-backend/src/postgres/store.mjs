@@ -240,6 +240,109 @@ export class PgStore {
       ).rows[0] ?? null
     );
   }
+  /** Commit a bounded, ordered group; preserve per-block rewind records. */
+  async applyBlocks(blocks) {
+    if (!Array.isArray(blocks) || blocks.length > 1000)
+      throw new Error("Block batch must contain at most 1000 blocks");
+    if (!blocks.length) return;
+    return this.transaction(async () => {
+      // Floor expiry is time-dependent even without events. Retain the ordinary
+      // reducer whenever listings exist, or when replaying an existing height.
+      const head = await this.head();
+      const listings = (
+        await this.query(
+          "SELECT 1 FROM market.orders WHERE kind='listing' LIMIT 1",
+        )
+      ).rowCount;
+      if (listings || (head && blocks[0].number <= head.number)) {
+        for (const block of blocks) await this.applyBlock(block);
+        return;
+      }
+      let run = [];
+      for (const block of blocks) {
+        if (block.events.length) {
+          if (run.length) {
+            await this.#applyEmptyBlocks(run);
+            run = [];
+          }
+          await this.applyBlock(block);
+          // Events can create listings. Re-enter the eligibility check for the
+          // remaining suffix rather than bypassing floor updates.
+          const next = blocks.indexOf(block) + 1;
+          if (next < blocks.length) await this.applyBlocks(blocks.slice(next));
+          return;
+        }
+        run.push(block);
+      }
+      if (run.length) await this.#applyEmptyBlocks(run);
+    });
+  }
+  async #applyEmptyBlocks(blocks) {
+    // Called only inside applyBlocks' writer transaction after eligibility checks.
+    let prior = await this.head();
+    const progress = new Map(
+      (await this.query("SELECT id,body FROM chain.progress")).rows.map((r) => [
+        r.id,
+        r.body,
+      ]),
+    );
+    const headers = [],
+      undo = [],
+      final = new Map();
+    for (const block of blocks) {
+      if (
+        prior &&
+        (block.number !== prior.number + 1 || block.parentHash !== prior.hash)
+      )
+        throw new ApiError(
+          "CHAIN_GAP",
+          "Block does not extend indexed head",
+          409,
+        );
+      if (block.events.length)
+        throw new Error("Empty block path cannot contain events");
+      headers.push({
+        number: block.number,
+        hash: block.hash,
+        parent: block.parentHash,
+        timestamp: block.timestamp,
+      });
+      for (const source of block.sources ?? []) {
+        const before = progress.get(source) ?? null;
+        undo.push({
+          height: block.number,
+          kind: "progress",
+          id: source,
+          before,
+        });
+        const body = {
+          source,
+          startBlock:
+            before?.startBlock ?? block.sourceStarts?.[source] ?? null,
+          block: block.number,
+          hash: block.hash,
+          observedAt: block.observedAt ?? Date.now(),
+        };
+        progress.set(source, body);
+        final.set(source, body);
+      }
+      prior = block;
+    }
+    await this.query(
+      "INSERT INTO chain.blocks SELECT number,hash,parent,timestamp FROM jsonb_to_recordset($1::jsonb) AS x(number bigint,hash text,parent text,timestamp bigint)",
+      [JSON.stringify(headers)],
+    );
+    if (undo.length)
+      await this.query(
+        "INSERT INTO chain.undo SELECT height,kind,id,before FROM jsonb_to_recordset($1::jsonb) AS x(height bigint,kind text,id text,before jsonb)",
+        [JSON.stringify(undo)],
+      );
+    if (final.size)
+      await this.query(
+        "INSERT INTO chain.progress SELECT id,body FROM jsonb_to_recordset($1::jsonb) AS x(id text,body jsonb) ON CONFLICT(id) DO UPDATE SET body=excluded.body",
+        [JSON.stringify([...final].map(([id, body]) => ({ id, body })))],
+      );
+  }
   async applyBlock(block) {
     return this.transaction(async () => {
       if (this.lease?.lost)

@@ -1,11 +1,13 @@
 import { createServer } from "node:http";
 import { runtime } from "./runtime.mjs";
+import { indexerOptions } from "./indexer-options.mjs";
 import { scanOnce } from "./indexer.mjs";
 import { refreshMetadata } from "./metadata.mjs";
 const mode = process.argv[2];
 if (!["index", "metadata"].includes(mode))
   throw new Error("Choose index or metadata");
 const { store, config, rpc } = await runtime();
+const scanOptions = mode === "index" ? indexerOptions() : null;
 const enabled = process.env.MARKETPLACE_BACKGROUND_ENABLED !== "false";
 if (enabled && (!rpc || !config.collections.length))
   throw new Error(
@@ -14,9 +16,13 @@ if (enabled && (!rpc || !config.collections.length))
 let stopped = false,
   lastProgress = null,
   lastError = null,
+  caughtUp = false,
   releaseLease;
 // SQLite compatibility workers share the API container and must not bind its port.
-const healthPort = store.dialect === "postgres" ? process.env.PORT : process.env.MARKETPLACE_WORKER_PORT;
+const healthPort =
+  store.dialect === "postgres"
+    ? process.env.PORT
+    : process.env.MARKETPLACE_WORKER_PORT;
 const health = healthPort
   ? createServer((req, res) => {
       if (req.url !== "/health/live") {
@@ -51,11 +57,12 @@ try {
       try {
         const result =
           mode === "index"
-            ? await scanOnce(store, rpc, config, { window: 100 })
+            ? await scanOnce(store, rpc, config, scanOptions)
             : await refreshMetadata(store, rpc, config, {
                 assetDir: config.assetDir,
                 limit: 10,
               });
+        if (mode === "index") caughtUp = result.indexed >= result.head;
         lastProgress = Date.now();
         lastError = null;
         console.log(
@@ -80,7 +87,10 @@ try {
     }
     if (!stopped)
       await new Promise((resolve) =>
-        setTimeout(resolve, mode === "index" ? 1000 : 2000),
+        setTimeout(
+          resolve,
+          mode === "index" ? (lastError || caughtUp ? 1000 : 100) : 2000,
+        ),
       );
   }
 } finally {
