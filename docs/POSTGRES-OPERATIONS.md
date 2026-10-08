@@ -211,3 +211,9 @@ RPC test measured 26.4 blocks/s for that configuration, versus 16.3 blocks/s and
 30 rate-limited responses with four 16-block batches. Full receipt digests matched.
 JSON-RPC batching remains configurable for providers/quotas that can sustain it;
 the current gain comes primarily from bulk database writes and larger scan windows.
+
+During Railway rolling deployment, the replacement indexer serves liveness with
+`writerLease: "waiting"` while the old process owns the database lease. It performs
+no RPC scan until the old writer stops and the lease becomes `held`. This lets the
+platform complete its health-check handover without allowing two writers. Check
+`lastProgress` and the lease state, not liveness alone, to confirm active indexing.

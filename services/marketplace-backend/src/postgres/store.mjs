@@ -109,7 +109,11 @@ export class PgStore {
         "SELECT pg_try_advisory_lock(hashtext('biblio-indexer'),1) AS acquired",
       );
       if (!rows[0].acquired)
-        throw new Error("Another scanner holds the writer lease");
+        throw new ApiError(
+          "INDEXER_LEASE_HELD",
+          "Another scanner holds the writer lease",
+          409,
+        );
     } catch (error) {
       client.release();
       throw error;

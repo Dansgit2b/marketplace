@@ -18,6 +18,8 @@ let stopped = false,
   lastError = null,
   caughtUp = false,
   releaseLease;
+let writerLease =
+  mode === "index" ? (enabled ? "waiting" : "disabled") : "not_required";
 // SQLite compatibility workers share the API container and must not bind its port.
 const healthPort =
   store.dialect === "postgres"
@@ -38,6 +40,7 @@ const health = healthPort
           enabled,
           lastProgress,
           lastError,
+          writerLease: store.lease?.lost ? "lost" : writerLease,
         }),
       );
     })
@@ -50,8 +53,19 @@ for (const signal of ["SIGINT", "SIGTERM"])
     health?.close();
   });
 try {
-  if (enabled && mode === "index" && store.acquireIndexerLease)
-    releaseLease = await store.acquireIndexerLease();
+  if (enabled && mode === "index" && store.acquireIndexerLease) {
+    // Railway probes the replacement before stopping the old container. Serve
+    // liveness while waiting; never scan until the database grants the lease.
+    while (!stopped && !releaseLease) {
+      try {
+        releaseLease = await store.acquireIndexerLease();
+        writerLease = "held";
+      } catch (error) {
+        if (error.code !== "INDEXER_LEASE_HELD") throw error;
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+    }
+  }
   while (!stopped) {
     if (enabled) {
       try {
