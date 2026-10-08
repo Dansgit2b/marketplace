@@ -41,6 +41,10 @@ test("collection cutover preserves application data and existing media, replaces
     cutoff: 1,
     completedCollections: [{ address: "0x3", supply: "0", checkedTokens: 0 }],
   });
+  await dp.query("INSERT INTO chain.meta VALUES($1,$2)", [
+    "import_provenance",
+    { source: "legacy" },
+  ]);
   await dp.query("INSERT INTO app.sessions VALUES ('saved','0x4',9999999999)");
   await dp.query("INSERT INTO media.assets VALUES ($1,'image/png',$2)", [
     "a".repeat(64) + ".png",
@@ -84,6 +88,14 @@ test("collection cutover preserves application data and existing media, replaces
   });
   assert.equal(result.head.number, "2");
   assert.equal(await ds.generation(), 2);
+  assert.deepEqual(
+    (
+      await dp.query(
+        "SELECT value FROM chain.meta WHERE key='import_provenance'",
+      )
+    ).rows[0].value,
+    { source: "legacy" },
+  );
   assert.equal(
     (await dp.query("SELECT count(*) FROM app.sessions")).rows[0].count,
     "1",

@@ -186,3 +186,5 @@ a fixed control that does not shift page content. The header's market-status
 indicator links to `/ops` for detailed freshness. Checkout gating is unchanged.
 Navigation stories cover wallet connection/disconnection, search focus/escape,
 active routes, populated cart, market errors, demo mode and pending transactions.
+
+`CollectionNotEnabled` verifies indexed-but-not-allowlisted collections cannot submit orders or show a misleading proceeds quote. The configuration endpoint supplies the indexed collection policy; live config polling updates the form after administrator activation.

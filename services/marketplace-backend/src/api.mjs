@@ -512,7 +512,17 @@ export function createApi({ store, config, rpc, verifySignature }) {
             chainId: config.chainId,
             marketplace: config.marketplace,
             currencies: config.currencies,
-            collections: config.collections,
+            collections: await Promise.all(
+              config.collections.map(async (c) => ({
+                ...c,
+                enabled: !!(
+                  await store.get(
+                    "policy",
+                    `collection_policy:${address(c.address)}`,
+                  )
+                )?.enabled,
+              })),
+            ),
             demo: !!config.demo,
             status: await catalog.status(),
           };

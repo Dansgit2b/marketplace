@@ -242,3 +242,37 @@ test("cached SVGs allow embedded image data while scripts and external requests 
   );
   assert.equal(response.headers.get("x-content-type-options"), "nosniff");
 });
+
+test("configuration distinguishes indexed collections from on-chain enabled collections", async (t) => {
+  const store = new Store(":memory:");
+  store.put("policy", `collection_policy:${address("9")}`, {
+    enabled: true,
+    royalties: true,
+  });
+  const api = createApi({
+    store,
+    config: {
+      chain: "LOCAL",
+      chainId: "0x1",
+      marketplace: null,
+      collections: [
+        { address: "9", name: "Enabled" },
+        { address: "10", name: "Pending" },
+      ],
+      currencies: [],
+    },
+  });
+  await new Promise((r) => api.listen(0, "127.0.0.1", r));
+  t.after(() => {
+    api.closeAllConnections();
+    api.close();
+    store.close();
+  });
+  const response = await fetch(
+    `http://127.0.0.1:${api.address().port}/v1/chains/LOCAL/marketplace/config`,
+  );
+  assert.deepEqual(
+    (await response.json()).data.collections.map((c) => c.enabled),
+    [true, false],
+  );
+});

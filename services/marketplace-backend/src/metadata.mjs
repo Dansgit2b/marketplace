@@ -278,6 +278,7 @@ export async function refreshMetadata(
           metadata.image,
         );
       let image = sameSource ? token.image : null;
+      if (!image && immutableImage && store.cachedImage) image = await store.cachedImage(metadata.image);
       let imageError = null;
       if (
         metadata.image &&

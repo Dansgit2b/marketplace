@@ -75,7 +75,7 @@ export function OrderComposer({
   }
   let preview: string | null = null;
   try {
-    if (selected && price) {
+    if (selected && price && !royaltyError) {
       preview = estimateSellerProceeds({
         price,
         decimals: selected.decimals,
@@ -190,7 +190,13 @@ export function OrderComposer({
         </div>
         <div className="flex justify-between gap-3">
           <dt className="text-muted-foreground">Creator royalty</dt>
-          <dd>{royaltyPercent === "0" ? "0%" : `Up to ${royaltyPercent}%`}</dd>
+          <dd>
+            {royaltyError
+              ? "Unavailable"
+              : royaltyPercent === "0"
+                ? "0%"
+                : `Up to ${royaltyPercent}%`}
+          </dd>
         </div>
         <div className="flex flex-wrap justify-between gap-2 border-t border-border/70 pt-3">
           <dt className="text-muted-foreground">

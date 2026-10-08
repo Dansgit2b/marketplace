@@ -85,6 +85,11 @@ export type MarketConfig = {
   paused: boolean;
   demo: boolean;
   currencies: Array<{ address: string; symbol: string; decimals: number }>;
-  collections: Array<{ address: string; name: string; royaltyBps?: number }>;
+  collections: Array<{
+    address: string;
+    name: string;
+    royaltyBps?: number;
+    enabled?: boolean;
+  }>;
   status: IndexStatus;
 };

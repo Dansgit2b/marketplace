@@ -11,3 +11,14 @@ test("reviewed royalty ceiling handles address padding and mixed collections wit
     /royalty/,
   );
 });
+
+test("disabled collections cannot prepare reviewed trading terms", () => {
+  assert.throws(
+    () =>
+      collectionRoyaltyLimit(
+        [{ address: "0x1", royaltyBps: 500, enabled: false }],
+        ["0x1"],
+      ),
+    /Trading is not enabled/,
+  );
+});

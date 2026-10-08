@@ -1,3 +1,4 @@
+import { readHistoryContracts } from "./history-reads.mjs";
 import { address, ApiError, fromU256, u256Felts } from "./domain.mjs";
 import { SELECTORS } from "./decode.mjs";
 import { mapConcurrent } from "./concurrency.mjs";
@@ -208,13 +209,16 @@ export async function reconcileHistory(
           [profile.address, state.lastTokenId ?? "-1", limit],
         )
       ).rows;
-      await mapConcurrent(tokens, 4, async ({ id, body }) => {
-        const owner = await rpc.contract(
-          profile.address,
-          SELECTORS.owner_of,
-          u256Felts(body.tokenId),
-          blockId,
-        );
+      const values = await readHistoryContracts(
+        rpc,
+        tokens.flatMap(({ body }) => [
+          [profile.address, SELECTORS.owner_of, u256Felts(body.tokenId)],
+          [profile.address, SELECTORS.get_approved, u256Felts(body.tokenId)],
+        ]),
+        blockId,
+      );
+      await mapConcurrent(tokens, 4, async ({ id, body }, index) => {
+        const owner = values[index * 2];
         if (owner.length !== 1 || address(owner[0]) !== body.owner)
           throw new ApiError(
             "HISTORY_OWNER_MISMATCH",
@@ -222,12 +226,7 @@ export async function reconcileHistory(
             503,
             { tokenId: body.tokenId },
           );
-        const approval = await rpc.contract(
-            profile.address,
-            SELECTORS.get_approved,
-            u256Felts(body.tokenId),
-            blockId,
-          ),
+        const approval = values[index * 2 + 1],
           indexed = await store.get("approval", id);
         if (
           approval.length !== 1 ||
@@ -252,14 +251,17 @@ export async function reconcileHistory(
           [state.lastOperatorId ?? "", limit, profile.address],
         )
       ).rows;
-      await mapConcurrent(pairs, 4, async ({ id, body }) => {
-        const [collection, owner, operator] = id.split(":");
-        const value = await rpc.contract(
-          collection,
-          SELECTORS.is_approved_for_all,
-          [owner, operator],
-          blockId,
-        );
+      const values = await readHistoryContracts(
+        rpc,
+        pairs.map(({ id }) => {
+          const [c, o, p] = id.split(":");
+          return [c, SELECTORS.is_approved_for_all, [o, p]];
+        }),
+        blockId,
+      );
+      await mapConcurrent(pairs, 4, async ({ id, body }, index) => {
+        const [, owner, operator] = id.split(":");
+        const value = values[index];
         if (
           value.length !== 1 ||
           ![0n, 1n].includes(BigInt(value[0])) ||
@@ -288,13 +290,17 @@ export async function reconcileHistory(
           [profile.address, state.lastOwner ?? "", limit],
         )
       ).rows;
-      await mapConcurrent(owners, 4, async ({ owner }) => {
-        const v = await rpc.contract(
-            profile.address,
-            SELECTORS.is_approved_for_all,
-            [owner, config.marketplace],
-            blockId,
-          ),
+      const values = await readHistoryContracts(
+        rpc,
+        owners.map(({ owner }) => [
+          profile.address,
+          SELECTORS.is_approved_for_all,
+          [owner, config.marketplace],
+        ]),
+        blockId,
+      );
+      await mapConcurrent(owners, 4, async ({ owner }, index) => {
+        const v = values[index],
           p = await store.get(
             "operator",
             `${profile.address}:${owner}:${address(config.marketplace)}`,

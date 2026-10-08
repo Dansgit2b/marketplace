@@ -16,12 +16,16 @@ const replacement = [
   "market.policies",
   "market.approvals",
   "market.operator_approvals",
-  "market.metadata_jobs",
   "market.daily_stats",
   "market.floor_current",
   "market.floor_history",
 ];
-const retained = ["market.token_metadata", "market.attributes", "media.assets"];
+const retained = [
+  "market.metadata_jobs",
+  "market.token_metadata",
+  "market.attributes",
+  "media.assets",
+];
 /** Atomically replace rebuildable projections. Application tables are never touched.
  * Both scanners must be stopped: leases are acquired on both databases. The source
  * must have independently reconciled history and contain the target's checkpoint.
@@ -121,6 +125,11 @@ export async function cutoverCollections(
     await target.query(
       `LOCK TABLE ${[...replacement, ...retained].join(",")} IN SHARE ROW EXCLUSIVE MODE`,
     );
+    const retainedMeta = (
+      await target.query(
+        "SELECT key,value FROM chain.meta WHERE key NOT IN ('identity','generation')",
+      )
+    ).rows;
     // DELETE preserves MVCC for API snapshots begun before the cutover.
     await target.query("DELETE FROM chain.history_ranges");
     for (const table of replacement) await target.query(`DELETE FROM ${table}`);
@@ -140,12 +149,23 @@ export async function cutoverCollections(
           c === "bytes" ? "'\\x'||encode(bytes,'hex') AS bytes" : '"' + c + '"',
         )
         .join(",");
+      const existingAssets =
+        table === "media.assets"
+          ? (await target.query("SELECT name FROM media.assets")).rows.map(
+              (r) => r.name,
+            )
+          : null;
       await source.query(
-        `DECLARE onboard_rows NO SCROLL CURSOR FOR SELECT ${selection} FROM ${table}`,
+        `DECLARE onboard_rows NO SCROLL CURSOR FOR SELECT ${selection} FROM ${table}${existingAssets ? " WHERE NOT(name=ANY($1::text[]))" : ""}`,
+        existingAssets ? [existingAssets] : [],
       );
       let copied = 0;
       while (true) {
-        const { rows } = await source.query("FETCH 100 FROM onboard_rows");
+        const { rows } = await source.query(
+          table === "media.assets"
+            ? "FETCH 1 FROM onboard_rows"
+            : "FETCH 100 FROM onboard_rows",
+        );
         if (!rows.length) break;
         await target.query(
           `INSERT INTO ${table} (${quoted}) SELECT ${quoted} FROM jsonb_populate_recordset(NULL::${table},$1::jsonb) ${retained.includes(table) ? "ON CONFLICT DO NOTHING" : ""}`,
@@ -160,6 +180,11 @@ export async function cutoverCollections(
       "UPDATE chain.meta SET value=$1::jsonb WHERE key='generation'",
       [generation.toString()],
     );
+    for (const row of retainedMeta)
+      await target.query(
+        "INSERT INTO chain.meta VALUES($1,$2) ON CONFLICT DO NOTHING",
+        [row.key, row.value],
+      );
     await target.query("COMMIT");
     await source.query("COMMIT");
     return {

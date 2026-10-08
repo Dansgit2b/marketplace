@@ -20,6 +20,12 @@ export const fixtureConfig: MarketConfig = {
   collections: [
     { address: "0xa", name: "Realms" },
     { address: "0xb", name: "Loot Chests", royaltyBps: 500 },
+    {
+      address: "0xc",
+      name: "Pending collection",
+      royaltyBps: 500,
+      enabled: false,
+    },
   ],
   status: {
     chain: "LOCAL",

@@ -249,3 +249,19 @@ export const CreatorRoyaltyMobile: Story = {
   ...CreatorRoyalty,
   globals: { viewport: { value: "mobile", isRotated: false } },
 };
+
+export const CollectionNotEnabled: Story = {
+  args: { collection: "0xc", kind: "collection_offer", tokenIds: [] },
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.type(canvas.getByLabelText("Price"), "10");
+    await expect(canvas.getByRole("alert")).toHaveTextContent(
+      "Trading is not enabled",
+    );
+    await expect(
+      canvas.getByRole("button", { name: "Make collection offer" }),
+    ).toBeDisabled();
+    await expect(canvas.getByText("Unavailable")).toBeVisible();
+    await expect(canvas.getByTestId("seller-proceeds")).toHaveTextContent("—");
+    await expect(signCalls).not.toHaveBeenCalled();
+  },
+};

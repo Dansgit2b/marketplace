@@ -136,4 +136,4 @@ perform network verification. The reference app verifies hash/network/sender and
 requires confirmation of the intended action, then calls `resume`. Do not clear
 pending storage on generic transport errors or automatically retry the signature.
 
-`collectionRoyaltyLimit(config.collections, addresses)` returns the highest reviewed royalty percentage for a selection, normalizing address padding and rejecting unknown collections or invalid basis points. Treat estimates using this ceiling as minimum seller proceeds; settlement snapshots actual token royalties and checks collection-offer royalties at fill time.
+`collectionRoyaltyLimit(config.collections, addresses)` returns the highest reviewed royalty percentage for a selection, normalizing address padding and rejecting unknown or explicitly disabled collections and invalid basis points. Treat estimates using this ceiling as minimum seller proceeds; settlement snapshots actual token royalties and checks collection-offer royalties at fill time.
