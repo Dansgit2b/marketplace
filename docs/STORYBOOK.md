@@ -156,3 +156,14 @@ The active dialog remains open while the coordinator is busy. When tracking stop
 it can be dismissed and reopened from the toolbar; delayed transactions expose a
 read-only status check. Dismissal never clears or resubmits a saved transaction.
 These stories simulate wallet responses; they do not sign real transactions.
+
+`Trading/Price input` checks decimal entry without floating-point conversion,
+currency switching, long values, validation and disabled states. The Realms
+composer has no editable royalty cap: new orders submit a zero cap and show a
+fixed 0% creator royalty beside the configured marketplace fee and seller proceeds.
+
+Exo 2 and Geist Mono are bundled under `public/brand/fonts` with their OFL licenses.
+This removes the Google font-service dependency from production builds. The preview
+uses the same font files through public URLs because its local-font adapter emits
+invalid unquoted filesystem URLs when the workspace path contains spaces. Font
+stories verify that the declared faces load rather than silently using a fallback.

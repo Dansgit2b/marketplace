@@ -26,8 +26,8 @@ type Story = StoryObj<typeof meta>;
 export const Listing: Story = {
   play: async ({ canvas, canvasElement, userEvent }) => {
     await userEvent.type(canvas.getByLabelText("Price"), "2.5");
-    await expect(canvas.getByText(/Minimum seller proceeds/)).toHaveTextContent(
-      "2.2 STRK",
+    await expect(canvas.getByTestId("seller-proceeds")).toHaveTextContent(
+      "2.45 STRK",
     );
     await userEvent.click(
       canvas.getByRole("button", { name: "List for sale" }),
@@ -101,34 +101,40 @@ export const BulkReprice: Story = {
   },
 };
 export const InvalidPrecision: Story = {
-  play: async ({ canvas, canvasElement, userEvent }) => {
+  play: async ({ canvas, userEvent }) => {
     await userEvent.type(
       canvas.getByLabelText("Price"),
       "1.0000000000000000001",
     );
-    await userEvent.click(
-      canvas.getByRole("button", { name: "List for sale" }),
+    await userEvent.tab();
+    await expect(await canvas.findByRole("alert")).toHaveTextContent(
+      "Use at most 18 decimal places",
     );
     await expect(
-      await within(canvasElement.ownerDocument.body).findByRole("alert"),
-    ).toHaveTextContent("Use at most 18 decimal places");
+      canvas.getByRole("button", { name: "List for sale" }),
+    ).toBeDisabled();
     await expect(signCalls).not.toHaveBeenCalled();
   },
 };
-export const InvalidRoyalty: Story = {
-  play: async ({ canvas, canvasElement, userEvent }) => {
-    await userEvent.type(canvas.getByLabelText("Price"), "1");
-    await userEvent.clear(canvas.getByLabelText("Maximum royalty percent"));
-    await userEvent.type(
-      canvas.getByLabelText("Maximum royalty percent"),
-      "51",
-    );
-    await userEvent.click(
-      canvas.getByRole("button", { name: "List for sale" }),
-    );
+export const NoCreatorRoyalty: Story = {
+  args: { kind: "token_offer" },
+  play: async ({ canvas, userEvent }) => {
     await expect(
-      await within(canvasElement.ownerDocument.body).findByRole("alert"),
-    ).toHaveTextContent("between 0 and 50%");
+      canvas.queryByLabelText("Maximum royalty percent"),
+    ).not.toBeInTheDocument();
+    await expect(canvas.getByText("Creator royalty")).toBeVisible();
+    await expect(canvas.getByText("0%")).toBeVisible();
+    await userEvent.type(
+      canvas.getByLabelText("Price"),
+      "1.000000000000000001",
+    );
+    await expect(canvas.getByLabelText("Price")).toHaveValue(
+      "1.000000000000000001",
+    );
+    await userEvent.click(canvas.getByRole("button", { name: "Make offer" }));
+    await expect(
+      signCalls.mock.calls[0][0].at(-1)?.calldata.slice(-3, -1),
+    ).toEqual(["0", "0"]);
   },
 };
 export const Disconnected: Story = {
@@ -205,5 +211,14 @@ export const RejectedOffer: Story = {
     );
     await expect(canvas.getByLabelText("Price")).toHaveValue("4.5");
     await expect(signCalls).not.toHaveBeenCalled();
+  },
+};
+
+export const OfferTerms: Story = {
+  args: {kind:'token_offer'},
+  play: async ({canvas,userEvent}) => {
+    await userEvent.type(canvas.getByLabelText('Price'),'10');
+    await expect(canvas.getByTestId('seller-proceeds')).toHaveTextContent('9.8 STRK');
+    await expect(canvas.queryByLabelText('Maximum royalty percent')).not.toBeInTheDocument();
   },
 };
