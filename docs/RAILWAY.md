@@ -16,8 +16,8 @@ One project, `realms-marketplace`, with two isolated Railway environments:
 | `staging` | Starknet Sepolia | `web`, `backend`, `indexer`, `metadata`, `postgres` | Independent PostgreSQL volume; retained SQLite rollback volume |
 | `production` | Starknet mainnet | `web`, `backend`, `indexer`, `metadata`, `postgres` | Independent PostgreSQL volume; retained SQLite rollback volume |
 
-The PostgreSQL rollout is in progress; follow [the migration runbook](POSTGRES-OPERATIONS.md)
-and the build plan's live status before changing store selection. `backend` serves
+Both environments now use PostgreSQL. Follow [the migration runbook](POSTGRES-OPERATIONS.md)
+and the build plan's evidence before changing store selection. `backend` serves
 HTTP, `indexer` owns the ordered scanner lease, and `metadata` handles enrichment.
 Workers share PostgreSQL through private networking and have distinct restricted
 roles. Staging workers stay disabled until its Sepolia registry is deployed.

@@ -156,3 +156,17 @@ checkpoint lag, metadata queue age and backup/restore failures. The worker's
 `/health/live` shows progress/error timestamps; API `/health/ready` still returns
 503 while the index is syncing, the contract is paused or prerequisites are absent.
 PostgreSQL does not make the RPC backfill faster by itself.
+
+## Recorded cutover — 8 October 2026
+
+Both Railway environments use PostgreSQL. Production was frozen at block 720985
+(hash `0x2b617cedc7825402bcedb2aa52479057a8afaba4eb5ffa39a6daade5ee364e`).
+Import and a separate Railway PostgreSQL dump/restore matched every source digest:
+56,824 blocks, 4,108 events, 3,938 token records, 89 assets and existing application
+records. Generation advanced from 1 to 2. Public media hashes and the Realms
+verification badge survived; the scanner subsequently advanced beyond 721085.
+See [the migration report](evidence/postgres-cutover-2026-10-08.json).
+
+The original SQLite snapshots/volume and the logical dump are retained. This does
+not establish completed backfill, peak-load acceptance, automatic failover or the
+proposed hourly backup objective. Contract activation remains a separate decision.

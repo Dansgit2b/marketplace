@@ -48,7 +48,12 @@ implemented and under deployment validation. Twenty PostgreSQL integration tests
 cover migration, scanner/replay parity, concurrent reads/auth, roles, crashes, leases
 and recovery. A PostgreSQL 18 dump/restore of the saved 3,163-block/1,623-token
 Realms sample passed full-content parity; this is not a production-size restore
-claim. Staging has migrated to PostgreSQL; production cutover is in progress.
+claim. Both Railway environments have migrated to PostgreSQL. Production imported
+56,824 blocks, 3,938 tokens, 4,108 events and 89 assets at checkpoint 720985; its
+Railway PostgreSQL dump/restore passed every source-table digest. The separate
+scanner resumed past checkpoint 721085 and metadata processing resumed.
+[Migration evidence](evidence/postgres-cutover-2026-10-08.json) records counts,
+digests and identity. The contract remains paused; full historical backfill is open.
 Backfill RPC acquisition remains a separate performance concern.
 
 ### Railway hosting — confirmed 8 October 2026
