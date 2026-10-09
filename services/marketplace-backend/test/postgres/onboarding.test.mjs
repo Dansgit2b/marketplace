@@ -4,6 +4,10 @@ import { testDatabase } from "./helpers.mjs";
 import { migrate } from "../../src/postgres/migrate.mjs";
 import { PgStore } from "../../src/postgres/store.mjs";
 import { cutoverCollections } from "../../src/postgres/onboarding.mjs";
+import {
+  collectionRecord,
+  sourceCoverage,
+} from "../../src/collection-catalog.mjs";
 test("collection cutover preserves application data and existing media, replaces projections atomically, and rejects stale evidence", async (t) => {
   const s = await testDatabase(t),
     d = await testDatabase(t),
@@ -36,6 +40,26 @@ test("collection cutover preserves application data and existing media, replaces
     sourceStarts: { "0x3": 1 },
   });
   await ss.put("collection", "0x3", { address: "0x3", name: "Fixture" });
+  const catalogRecord = collectionRecord({
+    chainId: "0x1",
+    address: "0x3",
+    state: "indexed",
+    standard: "ERC721",
+  });
+  await ss.put("catalog_collection", catalogRecord.id, catalogRecord, 2);
+  await ss.put(
+    "source_coverage",
+    catalogRecord.id,
+    sourceCoverage({
+      chainId: "0x1",
+      address: "0x3",
+      startBlock: 1,
+      block: 2,
+      hash: "0x2",
+      observedAt: Date.now(),
+    }),
+    2,
+  );
   await ss.put("status", "history", {
     state: "passed",
     cutoff: 1,
@@ -88,6 +112,14 @@ test("collection cutover preserves application data and existing media, replaces
   });
   assert.equal(result.head.number, "2");
   assert.equal(await ds.generation(), 2);
+  assert.equal(
+    (await ds.get("catalog_collection", catalogRecord.id)).replayGeneration,
+    2,
+  );
+  assert.equal(
+    (await ds.get("source_coverage", catalogRecord.id)).replayGeneration,
+    2,
+  );
   assert.deepEqual(
     (
       await dp.query(

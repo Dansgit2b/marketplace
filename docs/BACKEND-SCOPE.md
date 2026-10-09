@@ -67,6 +67,52 @@ follow-up onboarding work. v1 trading remains ERC-721 with quantity one.
 
 Portfolio scope is holdings of registered collections, not every NFT on Starknet. Historical/legacy collections may be retained in internal evidence but excluded from discovery using explicit registry policy; never infer replacement collections from similar names.
 
+### Future discovery catalog — epic #108, foundation #109
+
+The separate Starknet-wide indexing epic extends the catalog boundary in stages;
+it does not expand settlement policy or declare the public portfolio chain-wide.
+Migration 4 adds `chain.collection_catalog` and `chain.source_coverage`, keyed by
+canonical chain ID plus contract address. The catalog stores `unknown`, `candidate`,
+`syncing`, `indexed`, `unsupported` and `failed` states, NFT standard, deployment
+position, class-history intervals, classification evidence/uncertainty, decoder
+version and replay generation. Unknown transaction/event positions remain null.
+Classification and historical decoder selection are subsequent implementation
+issues; storing evidence does not establish that a classifier has run.
+
+Coverage stores start block, canonical checkpoint block/hash, observation time,
+replay generation and bounded, reason-bearing historical gaps. Configured records
+use `configured_scan` coverage and continue reading live `chain.progress`; new
+source jobs will write explicit `catalog` coverage. The catalog writer validates
+canonical anchors and commits facts, progress and undo entries together under the
+existing projection lock. It may be called inside the block writer transaction;
+network acquisition stays outside it. Rewind restores evidence and coverage and
+increments the replay generation; older explicit coverage fails readiness until
+revalidated. The collection-expansion cutover includes these rebuildable tables.
+
+Operator `GET /v1/chains/{chain}/operator/catalog` returns bounded, state-filtered,
+generation-scoped pages. `GET .../operator/catalog/{address}` returns one record
+and readiness for that collection's source. Both require the existing operator
+Bearer token and run in the API's repeatable-read snapshot. Readiness requires a
+known history start, no recorded gaps, a canonical checkpoint/current generation,
+fresh observation and chain identity, and bounded lag. Failed/unsupported explicit
+sources and pending/invalid configured-history reconciliation fail closed. An
+unrelated failed candidate does not degrade a requested healthy source. This
+answer measures source readiness; it does not replace checkout's existing direct
+checks, pause/configuration checks or reconciliation gates.
+
+Operator responses expose `indexed`, `visible`, `verified` and `tradable`
+separately. Indexed means the recorded catalog state is `indexed`, not proof of
+complete chain coverage. Existing `market.collections` metadata stays intact.
+Visibility is the existing registered default plus optional durable
+`app.app_meta` key `catalog_visibility:{chainId}:{address}`, always subject to
+moderation. Identity verification continues using the existing application
+verification record in the chain-bound database. Tradable means the existing
+configured registry and settlement collection policy permit ERC-721 settlement;
+it is not an execution guarantee. Unknown/discovered records default to hidden,
+unverified and non-tradable. Indexer-role writes cannot set these policy fields.
+Public catalog/SDK/holdings expansion and visibility-management workflows belong
+to #115. No frontend changes are included in this foundation.
+
 ## 3. Architecture
 
 ```mermaid

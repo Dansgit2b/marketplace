@@ -17,6 +17,7 @@ import {
   u256Felts,
 } from "./domain.mjs";
 import { SELECTORS } from "./decode.mjs";
+import { PgDiscoveryCatalog } from "./postgres/discovery-catalog.mjs";
 function options(params) {
   const o = Object.fromEntries(params);
   for (const k of ["filters", "tokenIds", "collections"])
@@ -345,7 +346,31 @@ export function createApi({ store, config, rpc, verifySignature }) {
         result = { id, status: "open" };
       } else if (route[0] === "operator") {
         operator();
-        if (route[1] === "reports" && req.method === "GET")
+        if (route[1] === "catalog" && req.method === "GET") {
+          if (store.dialect !== "postgres")
+            throw new ApiError(
+              "CATALOG_UNAVAILABLE",
+              "Discovery catalog requires PostgreSQL",
+              503,
+            );
+          const discovery = new PgDiscoveryCatalog(store, config);
+          if (route[2]) {
+            const collection = await discovery.collection(route[2]),
+              configured = config.collections?.find(
+                (c) => address(c.address) === collection.address,
+              );
+            result = {
+              ...collection,
+              readiness: await discovery.readiness([
+                {
+                  address: collection.address,
+                  requiredStartBlock:
+                    configured?.startBlock ?? collection.deployment?.block,
+                },
+              ]),
+            };
+          } else result = await discovery.list(q);
+        } else if (route[1] === "reports" && req.method === "GET")
           result = await app.reports();
         else if (route[1] === "reports" && req.method === "POST") {
           if (!["open", "resolved", "dismissed"].includes(data.status))

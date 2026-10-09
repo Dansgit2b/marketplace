@@ -80,12 +80,12 @@ export async function runtime(env = process.env) {
       if (
         !(
           await store.query(
-            "SELECT to_regclass('chain.history_ranges') AS table_name",
+            "SELECT to_regclass('chain.collection_catalog') AS table_name",
           )
         ).rows[0].table_name
       )
         throw new Error(
-          "PostgreSQL schema migration 2 is required before startup.",
+          "PostgreSQL schema migration 4 is required before startup.",
         );
       const actual = (
         await store.query("SELECT value FROM chain.meta WHERE key='identity'")

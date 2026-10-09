@@ -2635,6 +2635,134 @@
           }
         }
       }
+    },
+    "/v1/chains/{chain}/operator/catalog": {
+      "get": {
+        "summary": "List discovered collection evidence for operators",
+        "description": "Includes unsupported and failed candidates. Does not change public collection visibility or trading policy. Cursors bind chain, state filter and replay generation.",
+        "security": [
+          {
+            "OperatorBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "chain",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 2048
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "unknown",
+                "candidate",
+                "syncing",
+                "indexed",
+                "unsupported",
+                "failed"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Snapshot-consistent catalog evidence, source coverage and independent policy fields.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid page/state/address or incompatible cursor."
+          },
+          "403": {
+            "description": "Operator credentials required."
+          },
+          "503": {
+            "description": "PostgreSQL discovery catalog unavailable."
+          }
+        }
+      }
+    },
+    "/v1/chains/{chain}/operator/catalog/{address}": {
+      "get": {
+        "summary": "Read one discovered collection and its source readiness",
+        "description": "Returns chain/address identity, deployment/classification/decoder evidence, coverage start/checkpoint/hash/gaps/generation, independent indexed/visible/verified/tradable booleans, and readiness for this source. Tradable reflects existing registry/settlement eligibility, not successful preflight. Unknown history or unsupported sources fail readiness.",
+        "security": [
+          {
+            "OperatorBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "chain",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "address",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Snapshot-consistent catalog evidence, source coverage and independent policy fields.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid page/state/address or incompatible cursor."
+          },
+          "403": {
+            "description": "Operator credentials required."
+          },
+          "404": {
+            "description": "Collection has not been discovered."
+          },
+          "503": {
+            "description": "PostgreSQL discovery catalog unavailable."
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2966,6 +3094,13 @@
             "type": "integer"
           }
         }
+      }
+    },
+    "securitySchemes": {
+      "OperatorBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Existing operator token; never expose it to browser clients."
       }
     }
   }

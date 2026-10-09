@@ -56,6 +56,36 @@ royalties. Expansion rollout is in progress: separate backfill, multi-collection
 supply/ownership/approval reconciliation, atomic projection cutover preserving
 application data/media, then administrator allowlisting and live verification.
 
+### Starknet-wide NFT indexing — epic #108
+
+[Epic #108](https://github.com/BibliothecaDAO/marketplace/issues/108) adds a future
+mainnet catalog through discovery foundations (#109–111), automatic ERC-721
+indexing (#112–115), then legacy/ERC-1155 coverage and operational evidence
+(#116–118). Sepolia is for controlled validation. Discovery, indexing, visibility,
+identity verification and settlement eligibility are independent decisions.
+ERC-1155 holdings are future indexing work; ERC-1155 settlement, permissionless
+trading activation and external-venue sales decoders are excluded.
+
+First contribution, 10 October 2026: the #109 foundation adds PostgreSQL migration
+4, a chain/address collection catalog, canonical-position/classification/decoder
+evidence, replay generations, per-source coverage starts/checkpoints/gaps and
+authenticated operator reads. Existing registry entries seed as `unknown` or
+`syncing`; migration does not infer successful NFT classification or reconciliation.
+Configured sources continue using the existing scanner's progress. New evidence
+and explicit coverage share the ordered writer transaction and rewind journal.
+Visibility and verification remain durable application policy; tradability is
+derived from the existing registry and settlement allowlist. Discovered contracts
+are not automatically added to either. This implementation is local contribution
+work, not a production deployment or closure of the epic.
+
+Automatic deployment/upgrade discovery, classifier probes, historical decoder
+selection, independent backfill jobs, shared live acquisition, metadata scheduling,
+public discovered holdings and measured chain-wide coverage remain open. Historical
+RPC gaps and custom contracts must remain explicit. Complete token coverage needs
+reconciliation evidence beyond an address discovery. The existing Realms release
+and collection-expansion acceptance gates remain open as recorded below. Dates,
+capacity targets and cost estimates require provider/workload measurements.
+
 ### PostgreSQL migration — authorized 8 October 2026
 
 Replace the production SQLite store with PostgreSQL using `pg`. Preserve the public

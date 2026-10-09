@@ -5,6 +5,8 @@ const replacement = [
   "chain.events",
   "chain.undo",
   "chain.progress",
+  "chain.collection_catalog",
+  "chain.source_coverage",
   "chain.status",
   "chain.history_ranges",
   "chain.notification_outbox",
@@ -180,6 +182,14 @@ export async function cutoverCollections(
       "UPDATE chain.meta SET value=$1::jsonb WHERE key='generation'",
       [generation.toString()],
     );
+    // Copied catalog projections now belong to the target's cutover generation.
+    // Historical undo entries retain their original generation and fail closed
+    // after a rewind until their explicit coverage has been revalidated.
+    for (const table of ["chain.collection_catalog", "chain.source_coverage"])
+      await target.query(
+        `UPDATE ${table} SET body=jsonb_set(body,'{replayGeneration}',$1::jsonb)`,
+        [generation.toString()],
+      );
     for (const row of retainedMeta)
       await target.query(
         "INSERT INTO chain.meta VALUES($1,$2) ON CONFLICT DO NOTHING",

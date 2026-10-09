@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
+import { seedRegisteredCollections } from "./discovery-catalog.mjs";
 /** Only the migration connection runs DDL. Runtime roles receive explicit grants. */
 export async function migrate(pool) {
   const client = await pool.connect();
@@ -15,6 +16,7 @@ export async function migrate(pool) {
       [1, "001-initial.sql"],
       [2, "002-history-ranges.sql"],
       [3, "003-image-sources.sql"],
+      [4, "004-collection-catalog.sql"],
     ]) {
       const sql = readFileSync(new URL(`./${name}`, import.meta.url), "utf8");
       const checksum = createHash("sha256").update(sql).digest("hex");
@@ -30,6 +32,7 @@ export async function migrate(pool) {
         );
       if (!existing) {
         await client.query(sql);
+        if (version === 4) await seedRegisteredCollections(client);
         await client.query(
           "INSERT INTO public.marketplace_migrations(version,checksum) VALUES($1,$2)",
           [version, checksum],

@@ -30,6 +30,24 @@ writes only metadata, jobs, attributes and media; it cannot change ownership.
 Schema migrations use a separate administrator connection, never a runtime role.
 Migrations are checksummed; add a new migration instead of editing applied SQL.
 
+Schema migration 4 adds the discovery collection catalog and source coverage
+tables. It seeds existing chain-bound collection identities and progress without
+rewriting market, application or media rows. Existing catalog evidence is retained
+on repeated initialization. New PostgreSQL runtimes require migration 4 before
+startup. Run the administrator migration and re-provision the existing runtime
+roles so API/index roles receive grants on the new tables; metadata permissions
+remain limited to their existing tables. Re-provisioning is an operator deployment
+step and requires the existing private role credentials. No runtime service runs
+DDL or receives application permissions for discovery writes.
+
+For a verified SQLite import, run registry initialization after import verification
+to seed the new catalog; the import's original full-content digest contract remains
+unchanged. Catalog and coverage are rebuildable chain data; their undo rows share
+`chain.undo`. Visibility keys in `app.app_meta` are durable application policy and
+survive rewind/cutover. Operator catalog endpoints report coverage only for their
+requested source; public trading readiness and current allowlists retain their
+existing authority. The foundation is not automatic discovery or rollout evidence.
+
 Pools default to 10 API connections and 4 per worker in Railway. Read requests
 hold one repeatable-read snapshot. Projection transactions share a short advisory
 lock to coordinate metadata completion with rewind; RPC and media downloads occur

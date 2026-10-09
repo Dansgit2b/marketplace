@@ -4,6 +4,8 @@ import { address, ApiError } from "../domain.mjs";
 import { projectEvent, projectionReads } from "../projection.mjs";
 export const TABLES = Object.freeze({
   collection: "market.collections",
+  catalog_collection: "chain.collection_catalog",
+  source_coverage: "chain.source_coverage",
   token: "market.tokens",
   order: "market.orders",
   activity: "market.activity",

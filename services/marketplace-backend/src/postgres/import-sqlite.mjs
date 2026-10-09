@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { migrate } from "./migrate.mjs";
 import { PgStore, TABLES, METADATA_KEYS } from "./store.mjs";
 import { numericKey, address } from "../domain.mjs";
+import { seedRegisteredCollections } from "./discovery-catalog.mjs";
 const sorted = (value) =>
   Array.isArray(value)
     ? value.map(sorted)
@@ -554,4 +555,5 @@ export async function initializeRegistry(pool, config) {
       verified: false,
       ...(await store.get("collection", address(c.address))),
     });
+  await store.transaction(() => seedRegisteredCollections(store));
 }
