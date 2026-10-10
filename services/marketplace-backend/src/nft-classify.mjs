@@ -26,6 +26,7 @@ const ALIASES = {
   token_uri: ["token_uri", "tokenURI", "tokenUri"],
   uri: ["uri"],
   decimals: ["decimals"],
+  total_supply: ["total_supply", "totalSupply"],
   supports_interface: ["supports_interface", "supportsInterface"],
   implementation: [
     "get_implementation",
